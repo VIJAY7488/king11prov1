@@ -12,7 +12,7 @@ const createApp = ():Application => {
 
     app.use(
         cors({
-          origin: "http://localhost:5173",
+          origin: "https://king11pro.live",
           credentials: true,
         })
     );
