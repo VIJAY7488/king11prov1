@@ -12,7 +12,7 @@ interface Props {
 }
 
 const QUICK = [100, 250, 500, 1000, 2000, 5000];
-const QR_IMAGE_URL = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=kingxipro@upi&pn=KingXIPro&cu=INR";
+const QR_IMAGE_URL = "https://res.cloudinary.com/ddw7yo6jm/image/upload/v1773365689/WhatsApp_Image_2026-03-13_at_07.01.55_qjzcc8.jpg";
 const POLL_INTERVAL_MS = 5000; // poll every 5 seconds
 
 type Step = "amount" | "payment" | "pending";
@@ -183,7 +183,7 @@ export function AddMoneyModal({ show, onClose, onAdded, addToast }: Props) {
               min={10}
             />
           </div>
-          <p className="mt-2 text-xs font-semibold text-green-600">🎁 Add ₹1000+ and get 10% instant bonus!</p>
+          <p className="mt-2 text-xs font-semibold text-green-600"></p>
         </div>
       )}
 
@@ -201,7 +201,7 @@ export function AddMoneyModal({ show, onClose, onAdded, addToast }: Props) {
             <div className="p-3 bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl shadow-sm inline-block mb-3">
               <img src={QR_IMAGE_URL} alt="UPI QR Code" className="w-[180px] h-[180px] block" />
             </div>
-            <p className="text-xs font-bold text-[#3D3020]">kingxipro@upi</p>
+            <p className="text-xs font-bold text-[#3D3020]">vijaypatel.ai@axl</p>
             <p className="text-xs text-[#7A6A55] mt-0.5">Scan with any UPI app</p>
             <div className="flex gap-3 mt-3">
               {[["🔵", "GPay"], ["🟣", "PhonePe"], ["🔵", "Paytm"]].map(([icon, label]) => (
