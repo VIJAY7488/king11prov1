@@ -7,6 +7,7 @@ import { useAuthStore } from "@/store/authStore";
 import type { MatchFromApi } from "@/types/api";
 import { ContestCard, type Contest } from "@/components/contest/ContestCard";
 import { Modal } from "@/components/ui/modal";
+import HeroBanner from "@/components/home/HeroBanner";
 
 const Homepage = () => {
 
@@ -132,45 +133,17 @@ const Homepage = () => {
 
             {/* ── Hero ── */}
             <section className="mb-8">
-                <div className="bg-hero rounded-3xl overflow-hidden relative p-8 md:p-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6 min-h-[200px]">
-                    <div className="absolute inset-0 pointer-events-none">
-                        <div className="absolute top-0 right-1/3 w-96 h-72 rounded-full" style={{ background: "radial-gradient(ellipse, rgba(234,72,0,.18) 0%, transparent 70%)" }} />
-                        <div className="absolute bottom-0 right-0 w-72 h-60 rounded-full" style={{ background: "radial-gradient(ellipse, rgba(255,90,26,.12) 0%, transparent 70%)" }} />
-                        <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
-                    </div>
-                    <div className="relative z-10 space-y-4">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[0.7rem] font-bold uppercase tracking-widest" style={{ background: "rgba(234,72,0,.2)", border: "1px solid rgba(234,72,0,.35)", color: "#FF8C5A" }}>
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#FF5A1A] animate-pulse-dot" />
-                            Live Contests Active Now
-                        </div>
-                        <h1 className="font-display font-black leading-none text-white" style={{ fontSize: "clamp(2rem, 4.5vw, 3.25rem)" }}>
-                            WIN UP TO{" "}<span className="text-[#EA4800]">₹10 CRORE</span><br />THIS WEEKEND
-                        </h1>
-                        <p className="text-white/50 text-[0.9375rem] max-w-md">Join 45M+ players. Build your dream XI. Win real cash daily.</p>
-                        <div className="flex gap-3 flex-wrap">
-                            <button
-                                onClick={() => { if (!token) { toast({ type: "info", icon: "🔒", msg: "Please login to join a contest" }); navigate("/login"); return; } navigate("/teams"); }}
-                                className="bg-[#EA4800] text-white px-7 py-3.5 rounded-xl font-bold text-[0.9375rem] shadow-[0_6px_28px_rgba(234,72,0,.4)] hover:bg-[#FF5A1A] hover:-translate-y-px transition-all"
-                            >
-                                ⚡ Create Team Now
-                            </button>
-                            <button
-                                onClick={() => setShowPointTable(true)}
-                                className="px-7 py-3.5 rounded-xl font-bold text-[0.9375rem] text-white hover:bg-white/10 transition-all"
-                                style={{ background: "rgba(255,255,255,.08)", border: "1.5px solid rgba(255,255,255,.2)" }}>
-                                View Point Table
-                            </button>
-                        </div>
-                    </div>
-                    <div className="relative z-10 flex gap-8 md:gap-10 shrink-0">
-                        {[["₹10Cr", "Prize Pool"], ["24", "Live Matches"], ["45M+", "Players"]].map(([v, l]) => (
-                            <div key={l} className="text-center">
-                                <div className="font-display font-black text-[#EA4800] leading-none mb-1" style={{ fontSize: "clamp(1.75rem,3.5vw,2.5rem)" }}>{v}</div>
-                                <div className="text-[0.65rem] uppercase tracking-wider text-white/40 font-semibold">{l}</div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                <HeroBanner
+                  onCreateTeamClick={() => {
+                    if(!token) {
+                      toast({ type: "info", icon: "🔒", msg: "Please login to join a contest" });
+                      navigate("/login");
+                      return;
+                    }
+                    navigate("/teams");
+                  }}
+                  onPointSystemClick={() => setShowPointTable(true)}
+                />
             </section>
 
             {/* ── Matches ── */}
