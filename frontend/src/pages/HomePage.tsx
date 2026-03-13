@@ -71,10 +71,37 @@ const Homepage = () => {
 
     // Helper functions
     const matchId = (m: MatchFromApi) => m.id ?? m._id ?? "";
+    const matchDateObj = (m: MatchFromApi ) => {
+      const dateStr = m.matchDate ?? m.matchStartTime ?? "";
+      if(!dateStr) return null;
+      const d = new Date(dateStr);
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+
     const matchTime = (m: MatchFromApi) => {
-        const dateStr = m.matchDate ?? m.matchStartTime ?? "";
-        if (!dateStr) return "—";
-        return new Date(dateStr).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+      const d = matchDateObj(m);
+      if (!d) return "TBA";
+      return d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+    };
+
+    const matchDateLabel = (m: MatchFromApi) => {
+      const d = matchDateObj(m);
+      if(!d) return "Date TBA";
+      return d.toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" });
+    };
+
+    const matchStartsIn = (m: MatchFromApi) => {
+      const d = matchDateObj(m);
+      if (!d) return "Schedule soon";
+      const diffMs = d.getTime() - Date.now();
+      if (diffMs <= 0) return "Starting soon";
+      const mins = Math.floor(diffMs / 60000);
+      const days = Math.floor(mins / (60 * 24));
+      const hours = Math.floor((mins % (60 * 24)) / 60);
+      const remainingMins = mins % 60;
+      if (days > 0) return `${days}d ${hours}h left`;
+      if (hours > 0) return `${hours}h ${remainingMins}m left`;
+      return `${remainingMins}m left`;
     };
 
     function handleJoinMatch(m: MatchFromApi) {
@@ -135,7 +162,7 @@ const Homepage = () => {
             <section className="mb-8">
                 <HeroBanner
                   onCreateTeamClick={() => {
-                    if(!token) {
+                    if (!token) {
                       toast({ type: "info", icon: "🔒", msg: "Please login to join a contest" });
                       navigate("/login");
                       return;
@@ -160,9 +187,16 @@ const Homepage = () => {
                     {matches.map((m) => (
                         <div
                           key={matchId(m)}
-                          className="bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl p-4 transition-all hover:shadow-lg relative overflow-hidden"
+                          className={`border-[1.5px] rounded-2xl p-4 transition-all hover:shadow-lg relative overflow-hidden ${
+                            m.status === "UPCOMING"
+                              ? "bg-gradient-to-br from-[#FFF8EE] via-[#FFFDF8] to-white border-[#FFD8BF] shadow-[0_12px_35px_rgba(234,72,0,.11)] hover:-translate-y-1"
+                              : "bg-white border-[#E8E0D4] hover:-translate-y-0.5"
+                          }`}
                           style={{ borderTopWidth: 3, borderTopColor: m.status === "LIVE" ? "#EF4444" : "#EA4800" }}
                         >
+                          {m.status === "UPCOMING" && (
+                            <div className="absolute -right-10 -top-12 w-28 h-28 rounded-full bg-[#FFA26033] blur-2xl pointer-events-none" />
+                          )}
                           <div className="flex justify-between items-center mb-4">
                             <span className="text-[0.65rem] font-black tracking-wider uppercase bg-[#F4F1EC] px-2 py-0.5 rounded text-[#7A6A55]">
                               {m.format ?? "CRICKET"}
@@ -173,30 +207,49 @@ const Homepage = () => {
                               </span>
                             )}
                             {m.status === "UPCOMING" && (
-                              <span className="text-[0.65rem] font-black tracking-wider uppercase text-[#1A1208]">
-                                {matchTime(m)}
+                              <span className="text-[0.6rem] font-black tracking-wider uppercase text-[#EA4800] bg-[#FFF0E7] border border-[#FFD4BE] px-2 py-1 rounded-lg">
+                                ⏰ {matchDateLabel(m)} · {matchTime(m)}
                               </span>
                             )}
                           </div>
                           
                           <div className="flex items-center justify-between mb-2">
-                            <div className="font-display font-black text-xl">{m.team1Name}</div>
-                            <div className="text-[#B0A090] font-bold text-sm">vs</div>
-                            <div className="font-display font-black text-xl">{m.team2Name}</div>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-[#F4F1EC] border border-[#E8E0D4] text-[#3D3020] text-sm font-extrabold tracking-wide flex items-center justify-center shrink-0">
+                                {(m.team1Name ?? "T1").slice(0, 2).toUpperCase()}
+                              </div>
+                              <div className="font-display font-black text-xl truncate">{m.team1Name}</div>
+                            </div>
+                            <div className="text-[#B0A090] font-black text-sm px-2">VS</div>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="font-display font-black text-xl truncate text-right">{m.team2Name}</div>
+                              <div className="w-8 h-8 rounded-full bg-[#F4F1EC] border border-[#E8E0D4] text-[#3D3020] text-sm font-extrabold tracking-wide flex items-center justify-center shrink-0">
+                                {(m.team2Name ?? "T2").slice(0, 2).toUpperCase()}
+                              </div>
+                            </div>
                           </div>
                           
                           <div className="h-px bg-[#E8E0D4] my-3" />
+
+                          {m.status === "UPCOMING" && (
+                            <>
+                              <div className="mb-2 rounded-lg bg-[#FFF0E7] border border-[#FFD9C3] px-3 py-2 flex items-center justify-between">
+                                <span className="text-[0.68rem] font-black uppercase tracking-wider text-[#B3470F]">Match Date</span>
+                                <span className="text-xs font-bold text-[#1A1208]">{matchDateLabel(m)}, {matchTime(m)}</span>
+                              </div>
+                              <div className="mb-3 rounded-lg bg-gradient-to-r from-[#EA4800] to-[#FF6B2B] px-3 py-2 flex items-center justify-between shadow-[0_8px_22px_rgba(234,72,0,.24)]">
+                                <span className="text-[0.68rem] font-black uppercase tracking-wider text-white/85">Kickoff In</span>
+                                <span className="text-xs font-black text-white">🚀 {matchStartsIn(m)}</span>
+                              </div>
+                            </>
+                          )}
                           
                           <div className="flex justify-between items-center">
-                            <div className="flex flex-col">
-                                <div className="text-xs text-[#7A6A55] font-semibold">Prize Pool</div>
-                                <div className="font-bold text-[#EA4800]">₹{(m.prizePool ?? 0).toLocaleString("en-IN")}</div>
-                            </div>
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleJoinMatch(m); }}
                                 className="bg-gradient-to-br from-[#EA4800] to-[#FF5A1A] text-white px-4 py-1.5 rounded-xl font-bold text-sm shadow-[0_4px_12px_rgba(234,72,0,0.3)] hover:scale-105 active:scale-95 transition-all"
                             >
-                                Join Contests
+                                Join Contests →
                             </button>
                           </div>
                         </div>
