@@ -57,6 +57,18 @@ function normalizeRole(raw: string): string {
   return "BATSMAN";
 }
 
+function extractApiError(err: any, fallback: string): string {
+  const data = err?.response?.data;
+  if (typeof data?.message === "string" && data.message.trim()) return data.message;
+  if (typeof data?.error === "string" && data.error.trim()) return data.error;
+  if (typeof data === "string") {
+    const text = data.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    if (text) return text.slice(0, 180);
+  }
+  if (typeof err?.message === "string" && err.message.trim()) return err.message;
+  return fallback;
+}
+
 function toPlayerEntries(list: unknown): PlayerEntry[] {
   if (!Array.isArray(list)) return [];
   return list
@@ -273,7 +285,7 @@ export default function AdminMatchesPage() {
       resetFormState();
       load();
     } catch (e: any) {
-      setError(e?.response?.data?.message ?? (editingId ? "Error updating match" : "Error creating match"));
+      setError(extractApiError(e, editingId ? "Error updating match" : "Error creating match"));
     }
     finally { setSaving(false); }
   }
@@ -289,6 +301,10 @@ export default function AdminMatchesPage() {
       const m = res.data?.data?.match ?? res.data?.data;
       if (!m) {
         setError("Match details not found.");
+        return;
+      }
+      if (m.status !== "UPCOMING") {
+        setError(`Only UPCOMING matches can be edited. Current status: ${m.status}.`);
         return;
       }
 
@@ -309,7 +325,7 @@ export default function AdminMatchesPage() {
       setShowForm(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e: any) {
-      setError(e?.response?.data?.message ?? "Failed to load match for editing");
+      setError(extractApiError(e, "Failed to load match for editing"));
     }
   }
 
@@ -319,7 +335,7 @@ export default function AdminMatchesPage() {
     try {
       await api.patch(`/matches/${patchId}`, { status: patchStatus });
       load();
-    } catch (e: any) { setError(e?.response?.data?.message ?? "Error updating match"); }
+    } catch (e: any) { setError(extractApiError(e, "Error updating match")); }
     finally { setPatching(false); }
   }
 
@@ -429,7 +445,18 @@ export default function AdminMatchesPage() {
                   <td style={{ padding: "12px 16px" }}>
                     <button
                       onClick={() => startEdit(m.id ?? m._id ?? "")}
-                      style={{ padding: "6px 12px", border: "1px solid #2A2A2A", borderRadius: 8, background: "#1A1A1A", color: "#ddd", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                      disabled={m.status !== "UPCOMING"}
+                      title={m.status !== "UPCOMING" ? "Only UPCOMING matches can be edited" : "Edit match"}
+                      style={{
+                        padding: "6px 12px",
+                        border: "1px solid #2A2A2A",
+                        borderRadius: 8,
+                        background: m.status === "UPCOMING" ? "#1A1A1A" : "#121212",
+                        color: m.status === "UPCOMING" ? "#ddd" : "#555",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: m.status === "UPCOMING" ? "pointer" : "not-allowed",
+                      }}
                     >
                       Edit
                     </button>

@@ -24,7 +24,7 @@ export interface CreateMatchDTO {
   team2Name: string;
   team1Players: SquadPlayer[];
   team2Players: SquadPlayer[];
-  matchDate: Date;
+  matchDate: Date | string;
   venue?: string;
 }
 
@@ -33,7 +33,7 @@ export interface UpdateMatchDTO {
   team2Name?: string;
   team1Players?: SquadPlayer[];
   team2Players?: SquadPlayer[];
-  matchDate?: Date;
+  matchDate?: Date | string;
   venue?: string;
   status?: MatchStatus;
 }

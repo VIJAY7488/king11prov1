@@ -43,6 +43,56 @@ const hasNonStatusUpdates = (dto: UpdateMatchDTO): boolean =>
   dto.matchDate !== undefined ||
   dto.venue !== undefined;
 
+const ISO_HAS_TIMEZONE = /(Z|[+-]\d{2}:\d{2})$/i;
+const ISO_LOCAL_NO_TZ =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(\.\d{1,3})?)?$/;
+
+const IST_OFFSET_MINUTES = 330;
+
+const normalizeMatchDateInput = (
+  value: CreateMatchDTO['matchDate'] | NonNullable<UpdateMatchDTO['matchDate']>
+): Date => {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) throw new AppError('Invalid matchDate.', 422);
+    return new Date(value.getTime());
+  }
+
+  if (typeof value !== 'string') {
+    throw new AppError('matchDate must be a valid datetime string.', 422);
+  }
+
+  const raw = value.trim();
+  if (!raw) throw new AppError('matchDate is required.', 422);
+
+  // If timezone is explicit, trust it directly.
+  if (ISO_HAS_TIMEZONE.test(raw)) {
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) throw new AppError('Invalid matchDate format.', 422);
+    return parsed;
+  }
+
+  // If timezone is omitted (datetime-local), interpret as IST to avoid
+  // server-timezone drift when parsing on different environments.
+  const m = raw.match(ISO_LOCAL_NO_TZ);
+  if (!m) {
+    throw new AppError('matchDate must include a valid datetime (e.g. 2026-03-13T14:30).', 422);
+  }
+
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const hour = Number(m[4]);
+  const minute = Number(m[5]);
+  const second = Number(m[6] ?? '0');
+  const fraction = m[7] ?? '';
+  const ms = fraction ? Number((fraction.slice(1) + '00').slice(0, 3)) : 0;
+
+  const utcMs = Date.UTC(year, month - 1, day, hour, minute, second, ms) - IST_OFFSET_MINUTES * 60_000;
+  const normalized = new Date(utcMs);
+  if (Number.isNaN(normalized.getTime())) throw new AppError('Invalid matchDate value.', 422);
+  return normalized;
+};
+
 // ── Status Transitions ────────────────────────────────────────────────────────
 
 const ALLOWED_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
@@ -61,13 +111,14 @@ export class MatchService {
   // ── Admin: Create Match ───────────────────────────────────────────────────
   async createMatch(dto: CreateMatchDTO): Promise<MatchPublic> {
     assertUniqueSquadPlayerIds(dto.team1Players, dto.team2Players);
+    const normalizedMatchDate = normalizeMatchDateInput(dto.matchDate);
 
     const match = await Match.create({
       team1Name:    dto.team1Name,
       team2Name:    dto.team2Name,
       team1Players: dto.team1Players,
       team2Players: dto.team2Players,
-      matchDate:    dto.matchDate,
+      matchDate:    normalizedMatchDate,
       venue:        dto.venue,
       status:       MatchStatus.UPCOMING,
     });
@@ -113,7 +164,12 @@ export class MatchService {
       'matchDate', 'venue', 'status',
     ];
     for (const field of fields) {
-      if (dto[field] !== undefined) (match as any)[field] = dto[field];
+      if (dto[field] === undefined) continue;
+      if (field === 'matchDate') {
+        (match as any)[field] = normalizeMatchDateInput(dto.matchDate as NonNullable<UpdateMatchDTO['matchDate']>);
+      } else {
+        (match as any)[field] = dto[field];
+      }
     }
 
     await match.save();
