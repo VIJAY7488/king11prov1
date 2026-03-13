@@ -3,6 +3,7 @@ import { api } from "@/admin/api";
 
 interface Match {
   id: string;
+  _id?: string;
   name?: string;
   team1Name: string;
   team2Name: string;
@@ -54,6 +55,17 @@ function normalizeRole(raw: string): string {
   if (["AR", "ALL_ROUNDER", "ALLROUNDER", "ALL-ROUNDER"].includes(v)) return "ALL_ROUNDER";
   if (["BOWL", "BOWLER"].includes(v)) return "BOWLER";
   return "BATSMAN";
+}
+
+function toPlayerEntries(list: unknown): PlayerEntry[] {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((p: any, idx: number) => ({
+      _id: String(p?._id ?? p?.id ?? p?.playerId ?? p?.name ?? `player_${idx + 1}`),
+      name: String(p?.name ?? "").trim(),
+      role: normalizeRole(String(p?.role ?? "BATSMAN")),
+    }))
+    .filter((p) => p.name);
 }
 
 function SquadEditor({ label, players, onChange }: {
@@ -195,6 +207,7 @@ export default function AdminMatchesPage() {
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [form, setForm] = useState({ team1Name: "", team2Name: "", matchDate: "", venue: "" });
   const [team1Players, setTeam1Players] = useState<PlayerEntry[]>([]);
@@ -217,8 +230,14 @@ export default function AdminMatchesPage() {
   useEffect(() => { load(); }, []);
 
   function setF(k: string, v: string) { setForm((p) => ({ ...p, [k]: v })); }
+  function resetFormState() {
+    setForm({ team1Name: "", team2Name: "", matchDate: "", venue: "" });
+    setTeam1Players([]);
+    setTeam2Players([]);
+    setEditingId(null);
+  }
 
-  async function createMatch() {
+  async function saveMatch() {
     if (!form.team1Name || !form.team2Name || !form.matchDate) {
       setError("Team names and match date are required."); return;
     }
@@ -230,13 +249,54 @@ export default function AdminMatchesPage() {
 
     setSaving(true); setError("");
     try {
-      await api.post("/matches", { ...form, team1Players, team2Players });
+      const payload = { ...form, team1Players, team2Players };
+      if (editingId) {
+        await api.patch(`/matches/${editingId}`, payload);
+      } else {
+        await api.post("/matches", payload);
+      }
       setShowForm(false);
-      setForm({ team1Name: "", team2Name: "", matchDate: "", venue: "" });
-      setTeam1Players([]); setTeam2Players([]);
+      resetFormState();
       load();
-    } catch (e: any) { setError(e?.response?.data?.message ?? "Error creating match"); }
+    } catch (e: any) {
+      setError(e?.response?.data?.message ?? (editingId ? "Error updating match" : "Error creating match"));
+    }
     finally { setSaving(false); }
+  }
+
+  async function startEdit(matchId: string) {
+    if (!matchId) {
+      setError("Invalid match ID.");
+      return;
+    }
+    setError("");
+    try {
+      const res = await api.get(`/matches/${matchId}`);
+      const m = res.data?.data?.match ?? res.data?.data;
+      if (!m) {
+        setError("Match details not found.");
+        return;
+      }
+
+      const dt = m.matchDate ? new Date(m.matchDate) : null;
+      const matchDateLocal = dt && !Number.isNaN(dt.getTime())
+        ? new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+        : "";
+
+      setEditingId(m.id ?? m._id ?? matchId);
+      setForm({
+        team1Name: m.team1Name ?? "",
+        team2Name: m.team2Name ?? "",
+        matchDate: matchDateLocal,
+        venue: m.venue ?? "",
+      });
+      setTeam1Players(toPlayerEntries(m.team1Players));
+      setTeam2Players(toPlayerEntries(m.team2Players));
+      setShowForm(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e: any) {
+      setError(e?.response?.data?.message ?? "Failed to load match for editing");
+    }
   }
 
   async function updateStatus() {
@@ -256,7 +316,16 @@ export default function AdminMatchesPage() {
           <h1 style={{ fontSize: 26, fontWeight: 900, color: "#fff", marginBottom: 4 }}>Matches</h1>
           <p style={{ color: "#555", fontSize: 14 }}>Create matches with player squads. Update status to go LIVE.</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)}
+        <button
+          onClick={() => {
+            if (showForm) {
+              setShowForm(false);
+              resetFormState();
+            } else {
+              setShowForm(true);
+              setEditingId(null);
+            }
+          }}
           style={{ padding: "10px 20px", border: "none", borderRadius: 8, background: "#EA4800", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
           {showForm ? "Cancel" : "+ Create Match"}
         </button>
@@ -267,7 +336,9 @@ export default function AdminMatchesPage() {
       {/* ── Create Form ── */}
       {showForm && (
         <div style={{ background: "#141414", border: "1px solid #2A2A2A", borderRadius: 12, padding: 24, marginBottom: 24 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "#ddd", marginBottom: 20 }}>New Match</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#ddd", marginBottom: 20 }}>
+            {editingId ? "Edit Match" : "New Match"}
+          </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
             <Field label="Team 1 Name *"  value={form.team1Name} onChange={(v) => setF("team1Name", v)} placeholder="India" />
@@ -283,9 +354,9 @@ export default function AdminMatchesPage() {
             💡 <strong style={{ color: "#666" }}>Player ID</strong> — use any unique string (e.g. <code style={{ color: "#EA4800" }}>p_virat</code>) or a MongoDB ObjectId if your player collection is set up. The backend stores it as-is.
           </div>
 
-          <button onClick={createMatch} disabled={saving}
+          <button onClick={saveMatch} disabled={saving}
             style={{ padding: "11px 28px", border: "none", borderRadius: 8, background: saving ? "#5A2D00" : "#EA4800", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-            {saving ? "Creating..." : "Create Match →"}
+            {saving ? (editingId ? "Updating..." : "Creating...") : (editingId ? "Update Match →" : "Create Match →")}
           </button>
         </div>
       )}
@@ -317,13 +388,13 @@ export default function AdminMatchesPage() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #1E1E1E" }}>
-                {["Match", "Date", "Venue", "Status", "ID"].map((h) => (
+                {["Match", "Date", "Venue", "Status", "ID", "Actions"].map((h) => (
                   <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, fontWeight: 700, color: "#444", textTransform: "uppercase" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {matches.length === 0 && <tr><td colSpan={5} style={{ padding: 24, textAlign: "center", color: "#444" }}>No matches yet</td></tr>}
+              {matches.length === 0 && <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: "#444" }}>No matches yet</td></tr>}
               {matches.map((m) => (
                 <tr key={m.id} style={{ borderBottom: "1px solid #111" }}>
                   <td style={{ padding: "12px 16px" }}>
@@ -340,6 +411,14 @@ export default function AdminMatchesPage() {
                     title="Click to copy ID"
                     onClick={() => { navigator.clipboard.writeText(m.id ?? ""); }}>
                     {(m.id ?? "").slice(-8)} 📋
+                  </td>
+                  <td style={{ padding: "12px 16px" }}>
+                    <button
+                      onClick={() => startEdit(m.id ?? m._id ?? "")}
+                      style={{ padding: "6px 12px", border: "1px solid #2A2A2A", borderRadius: 8, background: "#1A1A1A", color: "#ddd", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                    >
+                      Edit
+                    </button>
                   </td>
                 </tr>
               ))}
