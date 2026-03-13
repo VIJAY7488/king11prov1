@@ -28,6 +28,21 @@ const toMatchPublic = (doc: IMatch): MatchPublic => ({
   updatedAt:    doc.updatedAt,
 });
 
+const assertUniqueSquadPlayerIds = (team1Players: IMatch['team1Players'], team2Players: IMatch['team2Players']): void => {
+  const allIds = [...team1Players.map((p) => p._id), ...team2Players.map((p) => p._id)];
+  if (new Set(allIds).size !== allIds.length) {
+    throw new AppError('Duplicate player IDs found across squads.', 422);
+  }
+};
+
+const hasNonStatusUpdates = (dto: UpdateMatchDTO): boolean =>
+  dto.team1Name !== undefined ||
+  dto.team2Name !== undefined ||
+  dto.team1Players !== undefined ||
+  dto.team2Players !== undefined ||
+  dto.matchDate !== undefined ||
+  dto.venue !== undefined;
+
 // ── Status Transitions ────────────────────────────────────────────────────────
 
 const ALLOWED_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
@@ -45,14 +60,7 @@ export class MatchService {
 
   // ── Admin: Create Match ───────────────────────────────────────────────────
   async createMatch(dto: CreateMatchDTO): Promise<MatchPublic> {
-    // Validate no duplicate playerIds within and across squads
-    const allIds = [
-      ...dto.team1Players.map(p => p._id),
-      ...dto.team2Players.map(p => p._id),
-    ];
-    if (new Set(allIds).size !== allIds.length) {
-      throw new AppError('Duplicate player IDs found across squads.', 422);
-    }
+    assertUniqueSquadPlayerIds(dto.team1Players, dto.team2Players);
 
     const match = await Match.create({
       team1Name:    dto.team1Name,
@@ -79,6 +87,15 @@ export class MatchService {
     ) {
       throw new AppError(`Match is ${match.status.toLowerCase()} and cannot be modified.`, 409);
     }
+
+    // Once LIVE, only status transitions are allowed to preserve scoring integrity.
+    if (match.status === MatchStatus.LIVE && hasNonStatusUpdates(dto)) {
+      throw new AppError('Match details cannot be edited after match is LIVE. Only status update is allowed.', 409);
+    }
+
+    const nextTeam1Players = dto.team1Players ?? match.team1Players;
+    const nextTeam2Players = dto.team2Players ?? match.team2Players;
+    assertUniqueSquadPlayerIds(nextTeam1Players, nextTeam2Players);
 
     // Status transition guard
     if (dto.status && dto.status !== match.status) {
