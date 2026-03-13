@@ -199,7 +199,7 @@ export function AddMoneyModal({ show, onClose, onAdded, addToast }: Props) {
 
           <div className="flex flex-col items-center mb-5">
             <div className="p-3 bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl shadow-sm inline-block mb-3">
-              <img src={QR_IMAGE_URL} alt="UPI QR Code" className="w-[180px] h-[180px] block" />
+              <img src={QR_IMAGE_URL} alt="UPI QR Code" className="w-[180px] h-[180px] block object-cover object-center rounded-lg" />
             </div>
             <p className="text-xs font-bold text-[#3D3020]">vijaypatel.ai@axl</p>
             <p className="text-xs text-[#7A6A55] mt-0.5">Scan with any UPI app</p>
