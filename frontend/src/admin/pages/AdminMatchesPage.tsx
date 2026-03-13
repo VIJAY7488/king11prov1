@@ -249,7 +249,21 @@ export default function AdminMatchesPage() {
 
     setSaving(true); setError("");
     try {
-      const payload = { ...form, team1Players, team2Players };
+      const parsedMatchDate = new Date(form.matchDate);
+      if (Number.isNaN(parsedMatchDate.getTime())) {
+        setError("Invalid match date/time.");
+        setSaving(false);
+        return;
+      }
+
+      // `datetime-local` has no timezone; convert to explicit UTC ISO
+      // so backend parses the same instant regardless of server timezone.
+      const payload = {
+        ...form,
+        matchDate: parsedMatchDate.toISOString(),
+        team1Players,
+        team2Players,
+      };
       if (editingId) {
         await api.patch(`/matches/${editingId}`, payload);
       } else {
