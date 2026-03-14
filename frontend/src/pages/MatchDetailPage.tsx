@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
 import { useMatchWebSocket } from "@/hooks/useMatchWebSocket";
+import { useApp } from "@/context/AppContext";
 import { useAuthStore } from "@/store/authStore";
 import type { MatchFromApi } from "@/types/api";
 
@@ -16,7 +17,9 @@ interface PlayerScore {
 export function MatchDetailPage() {
   const { matchId } = useParams();
   const navigate = useNavigate();
+  const { toast } = useApp();
   const user = useAuthStore(s => s.user);
+  const token = useAuthStore(s => s.token);
 
   const [match, setMatch] = useState<MatchFromApi | null>(null);
   const [scores, setScores] = useState<PlayerScore[]>([]);
@@ -28,6 +31,13 @@ export function MatchDetailPage() {
 
   useEffect(() => {
     if (!matchId) return;
+
+    if (!token) {
+      toast({ type: "info", icon: "🔒", msg: "Please login first to view match details" });
+      navigate("/login", { replace: true });
+      return;
+    }
+
     async function load() {
       try {
         const [mRes, sRes] = await Promise.all([
@@ -44,7 +54,7 @@ export function MatchDetailPage() {
       }
     }
     load();
-  }, [matchId]);
+  }, [matchId, navigate, toast, token]);
 
   if (loading) return <div className="p-12 text-center text-[#7A6A55] font-bold">Loading match details...</div>;
   if (error || !match) return <div className="p-12 text-center text-red-500 font-bold">{error ?? "Match not found"}</div>;

@@ -2,10 +2,14 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
+import { useApp } from "@/context/AppContext";
+import { useAuthStore } from "@/store/authStore";
 import type { MatchFromApi } from "@/types/api";
 
 export function MatchesPage() {
   const navigate = useNavigate();
+  const token = useAuthStore((s) => s.token);
+  const { toast } = useApp();
   const [matches, setMatches] = useState<MatchFromApi[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +41,19 @@ export function MatchesPage() {
     return new Date(dateStr).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
   }
 
+  function handleOpenMatch(m: MatchFromApi) {
+    const id = matchId(m);
+    if (!id) return;
+
+    if (!token) {
+      toast({ type: "info", icon: "🔒", msg: "Please login first to view match details" });
+      navigate("/login");
+      return;
+    }
+
+    navigate(`/matches/${id}`);
+  }
+
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-6 pt-6 pb-24 md:pb-8">
       <h1 className="font-display font-black text-3xl mb-6">🏏 Matches</h1>
@@ -58,7 +75,7 @@ export function MatchesPage() {
           {matches.map(m => (
             <div
               key={matchId(m)}
-              onClick={() => navigate(`/matches/${matchId(m)}`)}
+              onClick={() => handleOpenMatch(m)}
               className="bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl p-4 cursor-pointer hover:-translate-y-1 hover:border-[#EA4800] hover:shadow-lg transition-all"
               style={{ borderTopWidth: 3, borderTopColor: m.status === "LIVE" ? "#EF4444" : "#EA4800" }}
             >
