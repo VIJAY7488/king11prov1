@@ -235,6 +235,9 @@ contestSchema.index({ matchId: 1, status: 1 });
 contestSchema.index({ matchId: 1, contestType: 1 });
 contestSchema.index({ status: 1, createdAt: -1 });
 contestSchema.index({ status: 1, entryFee: 1 });
+// Optimizes public contest listing with filter + sort.
+contestSchema.index({ status: 1, matchId: 1, entryFee: 1, createdAt: -1 });
+contestSchema.index({ status: 1, contestType: 1, entryFee: 1, createdAt: -1 });
 contestSchema.index({ createdBy: 1, createdAt: -1 });
 contestSchema.index({ createdAt: -1 });
 

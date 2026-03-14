@@ -33,7 +33,17 @@ export function JoinedContestsPage() {
   const [playerPointsMap, setPlayerPointsMap] = useState<Map<string, number>>(new Map());
 
   async function loadLivePlayerPoints(contests: JoinedContestItem[]) {
-    const matchIds = [...new Set(contests.map((c) => c.match?.id).filter(Boolean))] as string[];
+    const matchIds = [
+      ...new Set(
+        contests
+          .filter((c) => {
+            const status = (c.match?.status ?? "").toUpperCase();
+            return status === "LIVE" || status === "COMPLETED";
+          })
+          .map((c) => c.match?.id)
+          .filter(Boolean)
+      ),
+    ] as string[];
     if (!matchIds.length) {
       setPlayerPointsMap(new Map());
       return;

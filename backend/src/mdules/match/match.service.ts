@@ -15,8 +15,16 @@ import { Team } from '../team/team.model';
 
 // ── Shape Mapper ──────────────────────────────────────────────────────────────
 
-const toMatchPublic = (doc: IMatch): MatchPublic => ({
-  id:           (doc._id as Types.ObjectId).toString(),
+type MatchDocLike = Pick<
+  IMatch,
+  'team1Name' | 'team2Name' | 'team1Players' | 'team2Players' | 'matchDate' | 'venue' | 'status' | 'createdAt' | 'updatedAt'
+> & { _id: Types.ObjectId | string };
+
+const MATCH_PUBLIC_PROJECTION =
+  'team1Name team2Name team1Players team2Players matchDate venue status createdAt updatedAt';
+
+const toMatchPublic = (doc: MatchDocLike): MatchPublic => ({
+  id:           doc._id.toString(),
   team1Name:    doc.team1Name,
   team2Name:    doc.team2Name,
   team1Players: doc.team1Players,
@@ -215,12 +223,17 @@ export class MatchService {
     if (params.status) filter['status'] = params.status;
 
     const [matches, total] = await Promise.all([
-      Match.find(filter).sort({ matchDate: -1 }).skip(skip).limit(limit),
+      Match.find(filter)
+        .select(MATCH_PUBLIC_PROJECTION)
+        .sort({ matchDate: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
       Match.countDocuments(filter),
     ]);
 
     return {
-      matches: matches.map(toMatchPublic),
+      matches: (matches as MatchDocLike[]).map(toMatchPublic),
       total,
       page,
       limit,
@@ -230,15 +243,18 @@ export class MatchService {
 
   // ── Public: Get Match By ID ───────────────────────────────────────────────
   async getMatchById(matchId: string): Promise<MatchPublic> {
-    const match = await Match.findById(matchId);
+    const match = await Match.findById(matchId).select(MATCH_PUBLIC_PROJECTION).lean();
     if (!match) throw new AppError('Match not found.', 404);
-    return toMatchPublic(match);
+    return toMatchPublic(match as MatchDocLike);
   }
 
   // ── Public: Get Live Matches ──────────────────────────────────────────────
   async getLiveMatches(): Promise<MatchPublic[]> {
-    const matches = await Match.findLive();
-    return matches.map(toMatchPublic);
+    const matches = await Match.find({ status: MatchStatus.LIVE })
+      .select(MATCH_PUBLIC_PROJECTION)
+      .sort({ matchDate: 1 })
+      .lean();
+    return (matches as MatchDocLike[]).map(toMatchPublic);
   }
 }
 

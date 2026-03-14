@@ -243,33 +243,44 @@ async function recalculateLeaderboards(
   const contests = await Contest.find({
     matchId,
     status: { $in: [ContestStatus.OPEN, ContestStatus.FULL, ContestStatus.CLOSED] },
-  }).select('_id name');
+  })
+    .select('_id name')
+    .lean();
 
   if (!contests.length) return [];
 
-  const contestIds = contests.map(c => c._id);
+  const contestIds = contests.map((c: any) => c._id);
 
   // 2. Only teams that contain one of the affected players
   const affectedTeams = await Team.find({
     contestId:          { $in: contestIds },
     'players.playerId': { $in: affectedPlayerIds },
-  }).select('_id contestId captainId viceCaptainId players');
+  })
+    .select('_id contestId captainId viceCaptainId players')
+    .lean();
 
   if (!affectedTeams.length) return [];
+
+  const affectedContestIds = new Set(affectedTeams.map((team: any) => team.contestId.toString()));
+  const affectedContests = (contests as any[]).filter((contest) =>
+    affectedContestIds.has(contest._id.toString())
+  );
+  if (!affectedContests.length) return [];
 
   // 3. Load all current fantasyPoints for this match in one read
   const allScores = await PlayerScore
     .find({ matchId: new Types.ObjectId(matchId) })
-    .select('playerId fantasyPoints');
+    .select('playerId fantasyPoints')
+    .lean();
 
   const scoreMap = new Map<string, number>();
-  for (const s of allScores) scoreMap.set(s.playerId, s.fantasyPoints);
+  for (const s of allScores as any[]) scoreMap.set(s.playerId, s.fantasyPoints);
 
   // 4. Recalculate livePoints for each affected team
   const R = SCORING_RULES;
   const teamPointsMap = new Map<string, number>();
 
-  for (const team of affectedTeams) {
+  for (const team of affectedTeams as any[]) {
     const captainId =
       team.captainId ??
       team.players.find((p: any) => p.captainRole === 'CAPTAIN')?.playerId ??
@@ -302,23 +313,25 @@ async function recalculateLeaderboards(
 
   // 6. Re-sort and re-rank within every affected contest
   const snapshots: WsLeaderboardSnapshot[] = [];
+  const rankOpsAll: any[] = [];
 
-  for (const contest of contests) {
+  for (const contest of affectedContests) {
     const entries = await ContestEntry
       .find({ contestId: contest._id })
-      .populate('userId', 'name')
+      .populate({ path: 'userId', select: 'name', options: { lean: true } })
       .sort({ livePoints: -1, joinedAt: 1 })
-      .select('userId teamId livePoints joinedAt');
+      .select('userId teamId livePoints joinedAt')
+      .lean();
 
-    const ranks = buildTieAwareRanks(entries, (e) => e.livePoints ?? 0);
-    const rankOps: any[]                            = [];
+    const rows = entries as any[];
+    const ranks = buildTieAwareRanks(rows, (e) => e.livePoints ?? 0);
     const leaderboardEntries: WsLeaderboardEntry[]  = [];
 
-    for (let i = 0; i < entries.length; i++) {
-      const entry    = entries[i];
+    for (let i = 0; i < rows.length; i++) {
+      const entry    = rows[i];
       const liveRank = ranks[i] ?? (i + 1);
 
-      rankOps.push({
+      rankOpsAll.push({
         updateOne: {
           filter: { _id: entry._id },
           update: { $set: { liveRank } },
@@ -336,14 +349,14 @@ async function recalculateLeaderboards(
       });
     }
 
-    if (rankOps.length) await ContestEntry.bulkWrite(rankOps);
-
     snapshots.push({
       contestId:   contest._id.toString(),
       contestName: contest.name,
       entries:     leaderboardEntries.slice(0, 50), // top 50 per WS payload
     });
   }
+
+  if (rankOpsAll.length) await ContestEntry.bulkWrite(rankOpsAll);
 
   return snapshots;
 }
@@ -355,12 +368,13 @@ async function resetContestEntriesIfNoScores(matchId: string, contestId: string)
   const entries = await ContestEntry
     .find({ contestId: new Types.ObjectId(contestId) })
     .sort({ joinedAt: 1 })
-    .select('_id');
+    .select('_id')
+    .lean();
 
   if (!entries.length) return;
 
   await ContestEntry.bulkWrite(
-    entries.map((entry) => ({
+    (entries as any[]).map((entry) => ({
       updateOne: {
         filter: { _id: entry._id },
         update: { $set: { livePoints: 0, liveRank: 1 } },
@@ -641,17 +655,19 @@ export class ScoreService {
     );
 
     // 4. Build final leaderboard snapshots
-    const contests = await Contest.find({ matchId }).select('_id name entryFee');
+    const contests = await Contest.find({ matchId }).select('_id name entryFee').lean();
     const leaderboards: WsLeaderboardSnapshot[] = [];
 
-    for (const contest of contests) {
+    for (const contest of contests as any[]) {
       const entries = await ContestEntry
         .find({ contestId: contest._id })
-        .populate('userId', 'name')
+        .populate({ path: 'userId', select: 'name', options: { lean: true } })
         .sort({ finalPoints: -1, joinedAt: 1 })
-        .select('userId teamId finalPoints');
+        .select('userId teamId finalPoints')
+        .lean();
 
-      if (entries.length === 0) {
+      const rows = entries as any[];
+      if (rows.length === 0) {
         leaderboards.push({
           contestId: contest._id.toString(),
           contestName: contest.name,
@@ -662,17 +678,17 @@ export class ScoreService {
 
       // Credit winnings by final rank based on contest prize distribution.
       // Idempotent at wallet transaction level via referenceId.
-      const grossCollection = ((contest as any).entryFee ?? 0) * entries.length;
+      const grossCollection = (contest.entryFee ?? 0) * rows.length;
       const netPrizePool = Math.max(0, grossCollection * (1 - PLATFORM_FEE_PERCENT / 100));
       const prizeDist = contestService.generatePrizeDistribution({
         prizePool: Math.round(netPrizePool * 100) / 100,
-        totalPlayers: Math.max(1, entries.length),
+        totalPlayers: Math.max(1, rows.length),
         winnerPercentage: 25,
       });
 
       const leaderboardEntries: WsLeaderboardEntry[] = [];
-      for (let i = 0; i < entries.length; i++) {
-        const e = entries[i];
+      for (let i = 0; i < rows.length; i++) {
+        const e = rows[i];
         const user = e.userId as any;
         const rank = i + 1;
         const prizeAmount = prizeDist.rankPrizes[i] ?? 0;
@@ -741,21 +757,23 @@ export class ScoreService {
    * REST fallback for initial page load — WS keeps it live after that.
    */
   async getLiveLeaderboard(contestId: string): Promise<WsLeaderboardSnapshot> {
-    const contest = await Contest.findById(contestId);
+    const contest = await Contest.findById(contestId).select('name matchId').lean();
     if (!contest) throw new AppError('Contest not found.', 404);
     await resetContestEntriesIfNoScores(String(contest.matchId), contestId);
 
     const entries = await ContestEntry
       .find({ contestId: new Types.ObjectId(contestId) })
-      .populate('userId', 'name')
+      .populate({ path: 'userId', select: 'name', options: { lean: true } })
       .sort({ livePoints: -1, joinedAt: 1 })
-      .select('userId teamId livePoints liveRank joinedAt');
-    const ranks = buildTieAwareRanks(entries, (e) => e.livePoints ?? 0);
+      .select('userId teamId livePoints liveRank joinedAt')
+      .lean();
+    const rows = entries as any[];
+    const ranks = buildTieAwareRanks(rows, (e) => e.livePoints ?? 0);
 
     return {
       contestId,
       contestName: contest.name,
-      entries: entries.map((e, i) => {
+      entries: rows.map((e, i) => {
         const user = e.userId as any;
         return {
           rank:        ranks[i] ?? (i + 1),
@@ -770,11 +788,11 @@ export class ScoreService {
   }
 
   async getContestLiveView(contestId: string, currentUserId: string): Promise<ContestLiveViewPublic> {
-    const contest = await Contest.findById(contestId).lean();
+    const contest = await Contest.findById(contestId).select('_id name matchId status').lean();
     if (!contest) throw new AppError('Contest not found.', 404);
     await resetContestEntriesIfNoScores(String(contest.matchId), contestId);
 
-    const match = await Match.findById(contest.matchId).lean();
+    const match = await Match.findById(contest.matchId).select('status team1Name team2Name').lean();
     if (!match) throw new AppError('Match not found for this contest.', 404);
 
     const scoreDocs = await PlayerScore
@@ -786,11 +804,12 @@ export class ScoreService {
 
     const entries = await ContestEntry
       .find({ contestId: new Types.ObjectId(contestId) })
-      .populate('userId', 'name')
-      .populate('teamId', 'teamName players captainId viceCaptainId')
-      .select('userId teamId joinedAt');
+      .populate({ path: 'userId', select: 'name', options: { lean: true } })
+      .populate({ path: 'teamId', select: 'teamName players captainId viceCaptainId', options: { lean: true } })
+      .select('userId teamId joinedAt')
+      .lean();
 
-    const calculated = entries.map((entry) => {
+    const calculated = (entries as any[]).map((entry) => {
       const team = entry.teamId as any;
       const captainId =
         team?.captainId ??
@@ -859,21 +878,24 @@ export class ScoreService {
     const allEntries = await ContestEntry
       .find({ contestId: contestObjectId })
       .sort({ livePoints: -1, joinedAt: 1 })
-      .select('_id livePoints');
+      .select('_id livePoints')
+      .lean();
 
-    const tieRanks = buildTieAwareRanks(allEntries, (e) => e.livePoints ?? 0);
+    const rows = allEntries as any[];
+    const tieRanks = buildTieAwareRanks(rows, (e) => e.livePoints ?? 0);
     const liveRankMap = new Map<string, number>();
-    for (let i = 0; i < allEntries.length; i++) {
-      const id = allEntries[i]?._id?.toString();
+    for (let i = 0; i < rows.length; i++) {
+      const id = rows[i]?._id?.toString();
       if (!id) continue;
       liveRankMap.set(id, tieRanks[i] ?? (i + 1));
     }
 
     const entry = await ContestEntry
       .findOne({ contestId: contestObjectId, teamId: teamObjectId })
-      .populate('userId', 'name')
-      .populate('teamId', 'teamName players captainId viceCaptainId userId')
-      .select('userId teamId livePoints liveRank');
+      .populate({ path: 'userId', select: 'name', options: { lean: true } })
+      .populate({ path: 'teamId', select: 'teamName players captainId viceCaptainId userId', options: { lean: true } })
+      .select('userId teamId livePoints liveRank')
+      .lean();
 
     if (!entry) throw new AppError('Team entry not found for this contest.', 404);
 

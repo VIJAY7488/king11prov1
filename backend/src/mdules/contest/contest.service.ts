@@ -8,8 +8,46 @@ import { MatchStatus } from "../match/match.types";
 
 // ── Shape Mappers ─────────────────────────────────────────────────────────────
 
-const toContestPublic = (doc: IContest): ContestPublic => ({
-  id: (doc._id as Types.ObjectId).toString(),
+type ContestDocLike = Pick<
+  IContest,
+  | 'matchId'
+  | 'name'
+  | 'contestType'
+  | 'entryFee'
+  | 'prizePool'
+  | 'platformFee'
+  | 'totalCollection'
+  | 'totalSpots'
+  | 'filledSpots'
+  | 'maxEntriesPerUser'
+  | 'isGuaranteed'
+  | 'status'
+  | 'description'
+  | 'closedAt'
+  | 'completedAt'
+  | 'cancelledAt'
+  | 'cancelReason'
+  | 'createdAt'
+  | 'updatedAt'
+> & {
+  _id: Types.ObjectId | string;
+  match?: any;
+};
+
+const CONTEST_PUBLIC_PROJECTION =
+  'matchId name contestType entryFee prizePool platformFee totalCollection totalSpots filledSpots maxEntriesPerUser isGuaranteed status description closedAt completedAt cancelledAt cancelReason createdAt updatedAt';
+
+const MATCH_LISTING_PROJECTION =
+  'team1Name team2Name team1Players team2Players matchDate venue status createdAt updatedAt';
+
+const JOINED_ENTRY_PROJECTION =
+  'contestId teamId joinedAt livePoints liveRank finalPoints finalRank';
+
+const JOINED_TEAM_PROJECTION =
+  'contestId matchId userId teamName players captainId viceCaptainId isLocked createdAt updatedAt';
+
+const toContestPublic = (doc: ContestDocLike): ContestPublic => ({
+  id: doc._id.toString(),
   matchId: doc.matchId,
   match: (doc as any).match,
   name: doc.name,
@@ -333,20 +371,27 @@ export class ContestService {
     if (params.contestType) filter['contestType'] = params.contestType;
 
     const [contests, total] = await Promise.all([
-      Contest.find(filter).sort({ entryFee: 1, createdAt: -1 }).skip(skip).limit(limit),
+      Contest.find(filter)
+        .select(CONTEST_PUBLIC_PROJECTION)
+        .sort({ entryFee: 1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
       Contest.countDocuments(filter),
     ]);
 
     // Fetch matches for these contests
-    const matchIds = [...new Set(contests.map((c) => c.matchId))];
+    const matchIds = [...new Set((contests as ContestDocLike[]).map((c) => c.matchId))];
     const validMatchIds = matchIds.filter((id) => Types.ObjectId.isValid(id));
     
     const { Match } = await import('../match/match.model');
-    const matches = await Match.find({ _id: { $in: validMatchIds } }).lean();
+    const matches = await Match.find({ _id: { $in: validMatchIds } })
+      .select(MATCH_LISTING_PROJECTION)
+      .lean();
     const matchMap = new Map(matches.map((m: any) => [m._id.toString(), m]));
 
     // Attach match objects
-    const populatedContests = contests.map((c: any) => {
+    const populatedContests = (contests as ContestDocLike[]).map((c: any) => {
       const matchDoc = matchMap.get(c.matchId);
       if (matchDoc) {
         c.match = { ...matchDoc, id: matchDoc._id.toString() };
@@ -354,18 +399,18 @@ export class ContestService {
       return c;
     });
 
-    return { contests: populatedContests.map(toContestPublic), total, page, limit,
+    return { contests: populatedContests.map((c) => toContestPublic(c as ContestDocLike)), total, page, limit,
              totalPages: Math.ceil(total / limit) };
   }
 
   async getContestById(contestId: string): Promise<ContestPublic> {
-    const contest = await Contest.findById(contestId);
+    const contest = await Contest.findById(contestId).select(CONTEST_PUBLIC_PROJECTION).lean();
     if (!contest) throw new AppError('Contest not found.', 404);
-    return toContestPublic(contest);
+    return toContestPublic(contest as ContestDocLike);
   }
 
   async getContestPrizeDistribution(contestId: string, winnerPercentage = 25): Promise<PrizeDistributionResult> {
-    const contest = await Contest.findById(contestId);
+    const contest = await Contest.findById(contestId).select('entryFee').lean();
     if (!contest) throw new AppError('Contest not found.', 404);
 
     const totalPlayers = await ContestEntry.countDocuments({ contestId: new Types.ObjectId(contestId) });
@@ -401,23 +446,30 @@ export class ContestService {
   }
 
   async getMyJoinedContests(userId: string): Promise<JoinedContestPublic[]> {
-    const { ContestEntry } = await import('./contest.model');
     const entries = await ContestEntry.find({ userId: new Types.ObjectId(userId) })
-      .populate('contestId')
-      .populate('teamId')
-      .sort({ joinedAt: -1 });
+      .select(JOINED_ENTRY_PROJECTION)
+      .populate({ path: 'contestId', select: CONTEST_PUBLIC_PROJECTION, options: { lean: true } })
+      .populate({ path: 'teamId', select: JOINED_TEAM_PROJECTION, options: { lean: true } })
+      .sort({ joinedAt: -1 })
+      .lean();
 
-    const rows = entries.filter((e: any) => e.contestId && e.teamId);
+    const rows = (entries as any[]).filter((e) => {
+      const contest = e?.contestId;
+      const team = e?.teamId;
+      return contest && typeof contest === 'object' && team && typeof team === 'object';
+    });
     if (!rows.length) return [];
 
-    const matchIds = [...new Set(rows.map((e: any) => e.contestId.matchId))];
+    const matchIds = [...new Set(rows.map((e: any) => String(e.contestId.matchId)))];
     const validMatchIds = matchIds.filter((id: string) => Types.ObjectId.isValid(id));
     const { Match } = await import('../match/match.model');
-    const matches = await Match.find({ _id: { $in: validMatchIds } }).lean();
+    const matches = await Match.find({ _id: { $in: validMatchIds } })
+      .select(MATCH_LISTING_PROJECTION)
+      .lean();
     const matchMap = new Map(matches.map((m: any) => [m._id.toString(), m]));
 
     return rows.map((entry: any) => {
-      const contest = entry.contestId as IContest;
+      const contest = entry.contestId as ContestDocLike;
       const team = entry.teamId as any;
       const match = matchMap.get(contest.matchId);
       const contestPublic = toContestPublic(contest);

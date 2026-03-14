@@ -8,8 +8,16 @@ import AppError from "../../utils/AppError";
 
 // ── Shape Mapper ──────────────────────────────────────────────────────────────
 
-const toTeamPublic = (doc: ITeam): TeamPublic => ({
-    id:           (doc._id as Types.ObjectId).toString(),
+type TeamDocLike = Pick<
+    ITeam,
+    'contestId' | 'matchId' | 'userId' | 'teamName' | 'players' | 'captainId' | 'viceCaptainId' | 'isLocked' | 'createdAt' | 'updatedAt'
+> & { _id: Types.ObjectId | string };
+
+const TEAM_PUBLIC_PROJECTION =
+    'contestId matchId userId teamName players captainId viceCaptainId isLocked createdAt updatedAt';
+
+const toTeamPublic = (doc: TeamDocLike): TeamPublic => ({
+    id:           doc._id.toString(),
     contestId:    doc.contestId.toString(),
     matchId:      doc.matchId?.toString() || '',
     userId:       doc.userId.toString(),
@@ -77,7 +85,7 @@ export class TeamService {
 
     async createTeam(userId: string, dto: CreateTeamDTO): Promise<TeamPublic> {
         // Verify contest exists and is still accepting entries
-        const contest = await Contest.findById(dto.contestId);
+        const contest = await Contest.findById(dto.contestId).select('status matchId');
         if (!contest) throw new AppError('Contest not found.', 404);
         if (
             contest.status !== ContestStatus.OPEN &&
@@ -91,7 +99,7 @@ export class TeamService {
 
         // Team creation is allowed only before match start.
         const { Match } = await import('../match/match.model');
-        const match = await Match.findById(contest.matchId);
+        const match = await Match.findById(contest.matchId).select('status');
         if (!match) throw new AppError('Match not found for this contest.', 404);
         if (match.status !== MatchStatus.UPCOMING) {
             throw new AppError('Team can be created only while match is UPCOMING.', 409);
@@ -111,13 +119,13 @@ export class TeamService {
 
     // ── Step 2: Edit team (allowed only before match start) ──────────────────
     async updateTeam(userId: string, teamId: string, dto: UpdateTeamDTO): Promise<TeamPublic> {
-        const team = await Team.findById(teamId);
+        const team = await Team.findById(teamId).select(TEAM_PUBLIC_PROJECTION);
         if (!team) throw new AppError('Team not found.', 404);
         if (team.userId.toString() !== userId) throw new AppError('You can edit only your own team.', 403);
         if (team.isLocked) throw new AppError('Team is locked and cannot be edited.', 409);
 
         const { Match } = await import('../match/match.model');
-        const match = await Match.findById(team.matchId);
+        const match = await Match.findById(team.matchId).select('status');
         if (!match) throw new AppError('Match not found for this team.', 404);
 
         // Editing is allowed strictly before match start.
@@ -133,7 +141,7 @@ export class TeamService {
     }
 
     async deleteTeam(userId: string, teamId: string): Promise<{ teamId: string; teamName: string }> {
-        const team = await Team.findById(teamId);
+        const team = await Team.findById(teamId).select('_id userId teamName');
         if (!team) throw new AppError('Team not found.', 404);
         if (team.userId.toString() !== userId) throw new AppError('You can delete only your own team.', 403);
 
@@ -164,8 +172,10 @@ export class TeamService {
     // ── User: Get My Teams ────────────────────────────────────────────────────
     async getMyTeams(userId: string): Promise<TeamPublic[]> {
         const teams = await Team.find({ userId: new Types.ObjectId(userId) })
-            .sort({ createdAt: -1 });
-        return teams.map(toTeamPublic);
+            .select(TEAM_PUBLIC_PROJECTION)
+            .sort({ createdAt: -1 })
+            .lean();
+        return (teams as TeamDocLike[]).map(toTeamPublic);
     }
 };
 

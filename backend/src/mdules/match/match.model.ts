@@ -127,6 +127,8 @@ const matchSchema = new Schema<IMatch, IMatchModel>(
 // ── Indexes ───────────────────────────────────────────────────────────────────
 
 matchSchema.index({ status: 1, matchDate: 1 });
+// Optimizes newest-first list endpoints with optional status filter.
+matchSchema.index({ status: 1, matchDate: -1 });
 matchSchema.index({ matchDate: -1 });
 
 // ── Statics ───────────────────────────────────────────────────────────────────
