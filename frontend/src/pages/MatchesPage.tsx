@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
+import { extractLiveUpcomingMatches } from "@/lib/matches";
 import { useApp } from "@/context/AppContext";
 import { useAuthStore } from "@/store/authStore";
 import type { MatchFromApi } from "@/types/api";
+import type { Contest } from "@/components/contest/ContestCard";
 
 export function MatchesPage() {
   const navigate = useNavigate();
@@ -16,6 +18,20 @@ export function MatchesPage() {
 
   useEffect(() => {
     async function load() {
+      if (!token) {
+        try {
+          const contestRes = await api.get("/contests?limit=100");
+          const contests: Contest[] = contestRes.data?.data?.contests ?? [];
+          setMatches(extractLiveUpcomingMatches(contests));
+          setError(null);
+        } catch (err) {
+          setError(getErrorMessage(err, "Failed to load matches"));
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         // Fetch all matches — backend doesn't support comma-separated status filter.
         // Filter LIVE and UPCOMING client-side.
@@ -29,7 +45,7 @@ export function MatchesPage() {
       }
     }
     load();
-  }, []);
+  }, [token]);
 
   // Resolve the match ID — backend returns `id` (virtual), not `_id`
   function matchId(m: MatchFromApi) { return m.id ?? m._id ?? ""; }

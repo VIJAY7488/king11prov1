@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
+import { extractLiveUpcomingMatches } from "@/lib/matches";
 import { useApp } from "@/context/AppContext";
 import { useAuthStore } from "@/store/authStore";
 import type { MatchFromApi } from "@/types/api";
@@ -24,23 +25,10 @@ const Homepage = () => {
     async function loadData() {
         try {
             setError(null);
-            const [matchRes, contestRes] = await Promise.allSettled([
-              api.get("/matches?limit=10"),
-              api.get("/contests?limit=12"),
-            ]);
-
             let hasData = false;
-
-            if (matchRes.status === "fulfilled") {
-              const allMatches: MatchFromApi[] = matchRes.value.data?.data?.matches ?? [];
-              setMatches(allMatches.filter((m) => m.status === "LIVE" || m.status === "UPCOMING").slice(0, 6));
-              hasData = true;
-            } else {
-              setMatches([]);
-            }
-
-            if (contestRes.status === "fulfilled") {
-              const allContests: Contest[] = contestRes.value.data?.data?.contests ?? [];
+            if (!token) {
+              const contestRes = await api.get("/contests?limit=12");
+              const allContests: Contest[] = contestRes.data?.data?.contests ?? [];
               const openContests = allContests
                 .filter((c) => c.status === "OPEN" || c.status === "FULL")
                 .sort((a, b) => {
@@ -50,9 +38,44 @@ const Homepage = () => {
                 })
                 .slice(0, 6);
               setContests(openContests);
+              setMatches(extractLiveUpcomingMatches(allContests).slice(0, 6));
               hasData = true;
             } else {
-              setContests([]);
+              const [matchRes, contestRes] = await Promise.allSettled([
+                api.get("/matches?limit=10"),
+                api.get("/contests?limit=12"),
+              ]);
+
+              let allContests: Contest[] = [];
+
+              if (matchRes.status === "fulfilled") {
+                const allMatches: MatchFromApi[] = matchRes.value.data?.data?.matches ?? [];
+                setMatches(allMatches.filter((m) => m.status === "LIVE" || m.status === "UPCOMING").slice(0, 6));
+                hasData = true;
+              } else {
+                setMatches([]);
+              }
+
+              if (contestRes.status === "fulfilled") {
+                allContests = contestRes.value.data?.data?.contests ?? [];
+                const openContests = allContests
+                  .filter((c) => c.status === "OPEN" || c.status === "FULL")
+                  .sort((a, b) => {
+                    if (a.status === "OPEN" && b.status !== "OPEN") return -1;
+                    if (a.status !== "OPEN" && b.status === "OPEN") return 1;
+                    return b.prizePool - a.prizePool;
+                  })
+                  .slice(0, 6);
+                setContests(openContests);
+                hasData = true;
+              } else {
+                setContests([]);
+              }
+
+              if (matchRes.status !== "fulfilled" && allContests.length > 0) {
+                setMatches(extractLiveUpcomingMatches(allContests).slice(0, 6));
+                hasData = true;
+              }
             }
 
             if (!hasData) {
@@ -67,7 +90,7 @@ const Homepage = () => {
         }
     }
 
-    useEffect(() => { loadData(); }, []);
+    useEffect(() => { loadData(); }, [token]);
 
     // Helper functions
     const matchId = (m: MatchFromApi) => m.id ?? m._id ?? "";
