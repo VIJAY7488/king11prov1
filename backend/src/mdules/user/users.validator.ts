@@ -16,12 +16,6 @@ const password = Joi.string()
 export const registerSchema = Joi.object({
     name: Joi.string().min(3).max(30).required(),
     mobileNumber,
-    telegramUsername: Joi.string()
-        .trim()
-        .lowercase()
-        .pattern(/^[a-zA-Z0-9_]{5,32}$/)
-        .optional()
-        .messages({ 'string.pattern.base': 'Telegram username must be 5–32 alphanumeric characters or underscores' }),
     password,
 });
 
@@ -36,12 +30,6 @@ export const refreshTokenSchema = Joi.object({
 
 export const updateProfileSchema = Joi.object({
     name: Joi.string().trim().min(2).max(100).optional(),
-    telegramUsername: Joi.string()
-        .trim()
-        .lowercase()
-        .pattern(/^[a-zA-Z0-9_]{5,32}$/)
-        .optional()
-        .allow(''),
 }).min(1);
 
 

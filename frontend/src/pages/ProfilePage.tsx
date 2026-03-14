@@ -67,9 +67,6 @@ export function ProfilePage() {
           <div>
             <h2 className="font-display font-black text-xl text-white">{user?.name ?? "—"}</h2>
             <p className="text-white/50 text-sm mb-1">{user?.mobileNumber ?? ""}</p>
-            {user?.telegramUsername && (
-              <p className="text-white/40 text-xs">@{user.telegramUsername}</p>
-            )}
             <div className="flex gap-2 mt-2">
               <span className="px-3 py-1 rounded-full text-xs font-bold" style={{ background: "rgba(234,72,0,.2)", border: "1px solid rgba(234,72,0,.35)", color: "#FF8C5A" }}>
                 {user?.role === "ADMIN" ? "⭐ Admin" : "⭐ Member"}

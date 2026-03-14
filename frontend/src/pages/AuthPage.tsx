@@ -11,7 +11,6 @@ interface FormState {
   mobileNumber: string;
   password: string;
   confirmPassword: string;
-  telegramUsername: string;
   agree: boolean;
 }
 
@@ -57,7 +56,7 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode; on
   const [mode, setMode]         = useState<AuthMode>(initialMode);
   const [loading, setLoading]   = useState(false);
   const [showPass, setShowPass] = useState(false);
-  const [form, setForm]         = useState<FormState>({ name: "", mobileNumber: "", password: "", confirmPassword: "", telegramUsername: "", agree: false });
+  const [form, setForm]         = useState<FormState>({ name: "", mobileNumber: "", password: "", confirmPassword: "", agree: false });
   const [errors, setErrors]     = useState<Partial<Record<keyof FormState, string>>>({});
 
   // If already logged in, go home
@@ -70,7 +69,6 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode; on
     const errs: typeof errors = {};
     if (mode === "signup") {
       if (!form.name.trim())             errs.name = "Name is required";
-      if (!form.telegramUsername.trim()) errs.telegramUsername = "Telegram username required";
       if (form.password !== form.confirmPassword) errs.confirmPassword = "Passwords do not match";
     }
     if (!form.mobileNumber.trim() || !/^\d{10}$/.test(form.mobileNumber))
@@ -87,7 +85,7 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode; on
       if (mode === "login") {
         await login(form.mobileNumber, form.password);
       } else {
-        await register({ name: form.name, mobileNumber: form.mobileNumber, telegramUsername: form.telegramUsername, password: form.password });
+        await register({ name: form.name, mobileNumber: form.mobileNumber, password: form.password });
       }
       navigate("/", { replace: true });
     } catch (err) {
@@ -101,7 +99,7 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode; on
   function switchMode(m: AuthMode) {
     setMode(m);
     setErrors({});
-    setForm({ name: "", mobileNumber: "", password: "", confirmPassword: "", telegramUsername: "", agree: false });
+    setForm({ name: "", mobileNumber: "", password: "", confirmPassword: "", agree: false });
   }
 
   return (
@@ -134,8 +132,6 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode; on
 
             <Field label="Mobile Number" type="tel" value={form.mobileNumber} placeholder="10-digit mobile"
               onChange={(v) => updateField("mobileNumber", v.replace(/\D/g, "").slice(0, 10))} error={errors.mobileNumber} />
-
-            {mode === "signup" && <Field label="Telegram Username" value={form.telegramUsername} onChange={(v) => updateField("telegramUsername", v)} error={errors.telegramUsername} />}
 
             <Field label="Password" type={showPass ? "text" : "password"} value={form.password}
               onChange={(v) => updateField("password", v)} error={errors.password}

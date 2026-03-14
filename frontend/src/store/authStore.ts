@@ -6,7 +6,6 @@ export interface AuthUser {
   id: string;
   name: string;
   mobileNumber: string;
-  telegramUsername?: string;
   role: string;
   walletBalance: number;
   isActive: boolean;
@@ -23,7 +22,6 @@ interface AuthState {
   register: (data: {
     name: string;
     mobileNumber: string;
-    telegramUsername: string;
     password: string;
   }) => Promise<void>;
   fetchProfile: () => Promise<void>;

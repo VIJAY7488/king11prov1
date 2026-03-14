@@ -16,7 +16,6 @@ export interface IUser extends Document {
     name: string;
     role: UserRole;
     mobileNumber: string;
-    telegramUsername?: string;
     password: string;
     walletBalance: number;
     isActive: boolean;
@@ -57,14 +56,6 @@ const userSchema = new Schema<IUser>({
         match: [/^\+?[1-9]\d{6,14}$/, 'Please enter a valid mobile number'],
     },
 
-    telegramUsername: {
-        type: String,
-        trim: true,
-        lowercase: true,
-        sparse: true, // allows multiple null values with unique index
-        match: [/^[a-zA-Z0-9_]{5,32}$/, 'Invalid Telegram username format'],
-    },
-
     password: {
         type: String,
         required: [true, 'Password is required'],
@@ -97,7 +88,6 @@ const userSchema = new Schema<IUser>({
 
 
 // ── Indexes ──────────────────────────────────────────────────────────────────
-userSchema.index({ telegramUsername: 1 }, { sparse: true });
 userSchema.index({ createdAt: -1 });
 
 

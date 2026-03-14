@@ -31,7 +31,6 @@ const toPublicProfile = (user: IUser): UserPublicProfile => ({
     id: user._id.toString(),
     name: user.name,
     mobileNumber: user.mobileNumber,
-    telegramUsername: user.telegramUsername,
     role: user.role,
     walletBalance: user.walletBalance,
     isActive: user.isActive,
@@ -52,7 +51,6 @@ export class UserService {
         const user = await User.create({
             name: dto.name,
             mobileNumber: dto.mobileNumber,
-            telegramUsername: dto.telegramUsername,
             password: dto.password, // hashed via pre-save hook
             role: UserRole.USER
         });

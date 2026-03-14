@@ -4,7 +4,6 @@ import { UserRole } from "./users.model";
 export interface RegisterDTO {
     name: string;
     mobileNumber: string;
-    telegramUsername?: string;
     password: string;
 };
 
@@ -15,7 +14,6 @@ export interface LoginDTO {
 
 export interface UpdateProfileDTO {
   name?: string;
-  telegramUsername?: string;
 };
 
 export interface ChangePasswordDTO {
@@ -29,7 +27,6 @@ export interface UserPublicProfile {
   id: string;
   name: string;
   mobileNumber: string;
-  telegramUsername?: string;
   role: UserRole;
   walletBalance: number;
   isActive: boolean;
