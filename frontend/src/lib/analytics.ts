@@ -45,7 +45,7 @@ export function setAnalyticsConsent(consent: AnalyticsConsent): void {
 }
 
 export function analyticsCanTrack(): boolean {
-  return envAllowsTracking && readStoredConsent() === "granted";
+  return envAllowsTracking;
 }
 
 export function initializeAnalytics(): void {
