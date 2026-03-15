@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import { useApp } from "@/context/AppContext";
 import { getErrorMessage } from "@/lib/error";
+import { trackEvent } from "@/lib/analytics";
 
 type AuthMode = "login" | "signup";
 
@@ -84,8 +85,10 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode; on
     try {
       if (mode === "login") {
         await login(form.mobileNumber, form.password);
+        trackEvent("login", { method: "mobile_password" });
       } else {
         await register({ name: form.name, mobileNumber: form.mobileNumber, password: form.password });
+        trackEvent("sign_up", { method: "mobile_password" });
       }
       navigate("/", { replace: true });
     } catch (err) {

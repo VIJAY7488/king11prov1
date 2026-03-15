@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
+import { trackEvent } from "@/lib/analytics";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/button";
 import { CreateTeamModal } from "@/components/createteam/CreateTeamModal";
@@ -91,6 +92,11 @@ export function TeamsPage() {
     setJoining(teamId);
     try {
       const res = await api.post("/users/join-contest", { contestId: urlContestId, teamId });
+      trackEvent("join_contest", {
+        contest_id: urlContestId,
+        team_id: teamId,
+        source: "teams_page",
+      });
       toast({ type: "success", icon: "🎉", msg: res.data?.data?.message ?? "Successfully joined contest!" });
       setJoinedTeamIds((prev) => {
         const next = new Set(prev);
@@ -325,10 +331,18 @@ export function TeamsPage() {
           mode={editingTeam ? "edit" : "create"}
           initialTeam={editingTeam}
           onSaved={() => { 
+            const wasEditing = !!editingTeam;
+            const savedMatchId = selectedMatch?.id ?? selectedMatch?._id ?? undefined;
             setCreateModal(false); 
             setSelectedMatch(null);
             setEditingTeam(null);
             loadData(); 
+            if (!wasEditing) {
+              trackEvent("create_team", {
+                match_id: savedMatchId,
+                source: urlContestId ? "contest_join_flow" : "teams_page",
+              });
+            }
             if (editingTeam) {
               toast({ type: "success", icon: "✅", msg: "Team updated successfully!" });
             } else if (urlContestId) {

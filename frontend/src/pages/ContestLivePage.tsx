@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
+import { trackEvent } from "@/lib/analytics";
 import { useApp } from "@/context/AppContext";
 import { Modal } from "@/components/ui/modal";
 
@@ -59,6 +60,7 @@ export function ContestLivePage() {
   const { contestId } = useParams();
   const { toast, refreshWallet } = useApp();
   const walletSyncedOnCompleteRef = useRef(false);
+  const trackedViewRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,6 +129,7 @@ export function ContestLivePage() {
 
   useEffect(() => {
     if (!contestId) return;
+    trackedViewRef.current = false;
     const timer = setInterval(() => loadContestLive(true), 7000);
     return () => clearInterval(timer);
   }, [contestId]);
@@ -141,6 +144,16 @@ export function ContestLivePage() {
     walletSyncedOnCompleteRef.current = true;
     void refreshWallet();
   }, [data?.contestStatus, refreshWallet]);
+
+  useEffect(() => {
+    if (!data || trackedViewRef.current) return;
+    trackEvent("view_contest", {
+      contest_id: data.contestId,
+      match_id: data.matchId,
+      contest_status: data.contestStatus,
+    });
+    trackedViewRef.current = true;
+  }, [data]);
 
   const top3 = useMemo(() => (data?.entries ?? []).slice(0, 3), [data]);
   const myEntry = useMemo(() => (data?.entries ?? []).find((e) => e.isCurrentUser) ?? null, [data]);

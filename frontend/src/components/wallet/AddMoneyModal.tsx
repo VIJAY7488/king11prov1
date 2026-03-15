@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { trackEvent } from "@/lib/analytics";
 import { getErrorMessage } from "@/lib/error";
 
 interface Props {
@@ -40,11 +41,22 @@ export function AddMoneyModal({ show, onClose, onAdded, addToast }: Props) {
         if (status === "APPROVED") {
           stopPolling();
           setDepositStatus("APPROVED");
+          trackEvent("payment_success", {
+            payment_type: "deposit",
+            amount: Number(amount),
+            method: "upi_manual",
+          });
           onAdded(Number(amount));        // update balance in Navbar
           addToast({ type: "success", icon: "✅", msg: `₹${amount} approved & added to wallet!` });
         } else if (status === "REJECTED") {
           stopPolling();
           setDepositStatus("REJECTED");
+          trackEvent("payment_failed", {
+            payment_type: "deposit",
+            amount: Number(amount),
+            method: "upi_manual",
+            reason: "rejected",
+          });
           addToast({ type: "error", icon: "❌", msg: "Deposit was rejected. Contact support." });
         }
         // PENDING → keep polling
@@ -106,9 +118,19 @@ export function AddMoneyModal({ show, onClose, onAdded, addToast }: Props) {
       const deposit = res.data?.data?.deposit;
       setDepositId(deposit?.id ?? null);
       setDepositStatus("PENDING");
+      trackEvent("add_money", {
+        amount: Number(amount),
+        method: "upi_manual",
+      });
       addToast({ type: "info", icon: "⏳", msg: "Deposit submitted! Awaiting admin approval." });
       setStep("pending");
     } catch (err) {
+      trackEvent("payment_failed", {
+        payment_type: "deposit",
+        amount: Number(amount),
+        method: "upi_manual",
+        reason: "submit_failed",
+      });
       addToast({
         type: "error",
         icon: "❌",

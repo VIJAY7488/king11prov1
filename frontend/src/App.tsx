@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppProvider } from "./context/AppContext";
 import { useAuthStore } from "./store/authStore";
+import { AnalyticsPageTracker } from "./components/analytics/AnalyticsPageTracker";
+import { AnalyticsConsentBanner } from "./components/analytics/AnalyticsConsentBanner";
 import Navbar from "./components/layout/Navbar";
 import ToastContainer from "./components/ui/ToastContainer";
 import { AuthPage } from "./pages/AuthPage";
@@ -122,6 +124,8 @@ function AppLayout() {
 export default function App() {
   return (
     <BrowserRouter>
+      <AnalyticsPageTracker />
+      <AnalyticsConsentBanner />
       <AppProvider>
         <Routes>
           {/* ── Admin section — no Navbar, dark layout ── */}

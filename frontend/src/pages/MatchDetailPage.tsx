@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
+import { trackEvent } from "@/lib/analytics";
 import { useMatchWebSocket } from "@/hooks/useMatchWebSocket";
 import { useApp } from "@/context/AppContext";
 import { useAuthStore } from "@/store/authStore";
@@ -46,6 +47,10 @@ export function MatchDetailPage() {
         ]);
         setMatch(mRes.data?.data?.match);
         setScores(sRes.data?.data?.scores ?? []);
+        trackEvent("view_match", {
+          match_id: matchId,
+          match_status: mRes.data?.data?.match?.status ?? undefined,
+        });
         // Note: For real leaderboards you need a contestId, so we will show the WS leaderboards instead if available
       } catch (err) {
         setError(getErrorMessage(err, "Failed to load match details"));

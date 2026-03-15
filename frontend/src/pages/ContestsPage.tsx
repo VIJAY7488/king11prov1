@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
+import { trackEvent } from "@/lib/analytics";
 import { useApp } from "@/context/AppContext";
 import { useAuthStore } from "@/store/authStore";
 import { ContestCard, type Contest } from "@/components/contest/ContestCard";
@@ -39,6 +40,12 @@ export function ContestsPage() {
   }, [urlMatchId]);
 
   async function handleJoin(c: Contest) {
+    trackEvent("view_contest", {
+      contest_id: c.id,
+      match_id: c.matchId,
+      contest_status: c.status,
+    });
+
     if (!token) {
         toast({ type: "info", icon: "🔒", msg: "Please login to join a contest" });
         navigate("/login");
@@ -64,6 +71,11 @@ export function ContestsPage() {
     if (urlTeamId) {
         try {
             const res = await api.post("/users/join-contest", { contestId: c.id, teamId: urlTeamId });
+            trackEvent("join_contest", {
+              contest_id: c.id,
+              match_id: c.matchId,
+              source: "contests_with_team",
+            });
             toast({ type: "success", icon: "🎉", msg: res.data?.data?.message ?? "Successfully joined contest!" });
             if (typeof res.data?.data?.newBalance === "number") {
               setWalletBalance(res.data.data.newBalance);

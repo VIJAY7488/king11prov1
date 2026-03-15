@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { trackEvent } from "@/lib/analytics";
 import { getErrorMessage } from "@/lib/error";
 
 interface Props {
@@ -70,6 +71,10 @@ export function WithdrawMoneyModal({ show, onClose, onRequested, addToast }: Pro
       const res = await api.post("/users/withdrawal", payload);
       const newBalance = res.data?.data?.walletBalance;
       if (typeof newBalance === "number") onRequested(newBalance);
+      trackEvent("withdraw_request", {
+        amount: amt,
+        method,
+      });
 
       addToast({
         type: "success",
