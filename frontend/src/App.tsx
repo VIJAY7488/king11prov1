@@ -93,7 +93,7 @@ function AppLayout() {
   return (
     <div className="min-h-screen" style={{ background: "#FAFAF8" }}>
       <Navbar />
-      <main>
+      <main className="pb-24 md:pb-0">
         <Routes>
           {/* Public */}
           <Route path="/"          element={<HomePage />} />

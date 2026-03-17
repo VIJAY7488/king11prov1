@@ -1,11 +1,15 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import { useApp } from "@/context/AppContext";
 import { AddMoneyModal } from "../wallet/AddMoneyModal";
 
 const Navbar = () => {
+
   const navigate = useNavigate();
+  const location = useLocation();
+  const pathname = location.pathname;
+
 
   const user    = useAuthStore((s) => s.user);
   const logout  = useAuthStore((s) => s.logout);
@@ -27,7 +31,40 @@ const Navbar = () => {
     void logout().finally(() => {
       navigate("/");
     });
-  }
+  };
+
+  const mobileNavitems = [
+    {
+      to: "/",
+      icon: "🏠",
+      label: "Home",
+      isActive: pathname === "/",
+    },
+    {
+      to: "/contests",
+      icon: "🏆",
+      label: "Contests",
+      isActive: pathname === "/contests" || pathname.startsWith("/contests/"),
+    },
+    {
+      to: isAuthed ? "/teams" : "/login",
+      icon: "👕",
+      label: "Teams",
+      isActive: pathname === "/teams" || pathname.startsWith("/teams/"),
+    },
+    {
+      to: "/matches",
+      icon: "📊",
+      label: "Scores",
+      isActive: pathname === "/matches" || pathname.startsWith("/matches/"),
+    },
+    {
+      to: isAuthed ? "/profile" : "/login",
+      icon: "👤",
+      label: "Profile",
+      isActive: pathname === "/profile" || pathname.startsWith("/profile/"),
+    }
+  ];
 
   return (
     <>
@@ -111,6 +148,19 @@ const Navbar = () => {
           </div>
         </div>
       </nav>
+
+      <div className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t-[1.5px] border-[#E8E0D4] bg-white/95 backdrop-blur-xl shadow-[0_-8px_24px_rgba(26,18,8,0.08)]"
+        style={{paddingBottom: "max(env(safe-area-inset-bottom), 0.35rem)"}}>
+          <div className="mx-auto flex h-16 max-w-[560px] items-center justify-around px-2">
+            {mobileNavitems.map((item) => (
+              <Link key={item.label} to={item.to} className={`flex flex-1 min-w-0 flex-col items-center rounded-xl px-1 py-1 transition-all ${item.isActive ? "text-[#EA4800]" : "text-[#7A6A55]"}`}
+              >
+                <span className={`mb-0.5 flex h-7 w-10 items-center justify-center rounded-xl text-[1.15rem] ${item.isActive ? "bg-[#FFF0EA]" : ""}`}>{item.icon}</span>
+                <span className="text-[0.8rem] font-extrabold leading-none">{item.label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
 
       <AddMoneyModal
         show={showAddMoney}
