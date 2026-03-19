@@ -61,8 +61,8 @@ export default function AdminContestsPage() {
     try {
       await api.post("/contest", {
         ...form,
-        entryFee: Number(form.entryFee),
-        prizePool: isFreeContest ? 0 : Number(form.prizePool),
+        entryFee: isFreeContest ? 0 : Number(form.entryFee),
+        prizePool: Number(form.prizePool),
         maxEntriesPerUser: Number(form.maxEntriesPerUser),
       });
       setShowForm(false);
@@ -126,10 +126,6 @@ export default function AdminContestsPage() {
             </div>
             <div>
               <label style={LABEL_STYLE}>Entry Fee (₹) *</label>
-              <input type="number" value={form.entryFee} onChange={(e) => setF("entryFee", e.target.value)} placeholder="50" style={INPUT_STYLE} />
-            </div>
-            <div>
-              <label style={LABEL_STYLE}>Prize Pool (₹) *</label>
               <input
                 type="number"
                 value={isFreeContest ? "0" : form.entryFee}
@@ -137,6 +133,16 @@ export default function AdminContestsPage() {
                 placeholder={isFreeContest ? "0 (free entry)" : "50"}
                 disabled={isFreeContest}
                 style={{ ...INPUT_STYLE, opacity: isFreeContest ? 0.7 : 1 }}
+              />
+            </div>
+            <div>
+              <label style={LABEL_STYLE}>Prize Pool (₹) *</label>
+              <input
+                type="number"
+                value={form.prizePool}
+                onChange={(e) => setF("prizePool", e.target.value)}
+                placeholder={isFreeContest ? "e.g. 5000" : "e.g. 50000"}
+                style={INPUT_STYLE}
               />
             </div>
             <div>
