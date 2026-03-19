@@ -226,8 +226,6 @@ export function TeamsPage() {
                 <div className="bg-[#F4F1EC] border-b-[1.5px] border-[#E8E0D4] px-5 py-3.5 flex items-center justify-between">
                   <div>
                     <p className="font-display font-black text-[1.05rem]">{t.teamName}</p>
-                    {/* Only show contest ID if they are viewing all teams and it's joined */}
-                    {!urlContestId && t.contestId && <p className="text-xs text-[#7A6A55]">Contest: {t.contestId}</p>}
                   </div>
                   <div className="flex gap-2">
                     {urlContestId ? (
@@ -258,22 +256,26 @@ export function TeamsPage() {
                         >
                           Edit
                         </Button>
-                        <Button size="sm" onClick={() => navigate(`/contests?matchId=${t.matchId || ''}&teamId=${teamDocId}`)} disabled={!t.matchId || !teamDocId}>
-                          {t.matchId ? "Join Contest →" : "Invalid Legacy Team"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => teamDocId && handleDeleteTeam(teamDocId, t.teamName)}
-                          disabled={!teamDocId || deletingTeamId === teamDocId || isJoinedTeam}
-                          className={`${
-                            isJoinedTeam
-                              ? "text-[#7A6A55] border-[#E8E0D4]"
-                              : "text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                          }`}
-                        >
-                          {isJoinedTeam ? "Joined" : deletingTeamId === teamDocId ? "Deleting..." : "Delete"}
-                        </Button>
+                        {isJoinedTeam ? (
+                          <span className="inline-flex items-center px-3 py-1.5 rounded-lg border border-[#E8E0D4] bg-[#FAFAF8] text-xs font-bold text-[#7A6A55]">
+                            Joined
+                          </span>
+                        ) : (
+                          <>
+                            <Button size="sm" onClick={() => navigate(`/contests?matchId=${t.matchId || ''}&teamId=${teamDocId}`)} disabled={!t.matchId || !teamDocId}>
+                              {t.matchId ? "Join Contest →" : "Invalid Legacy Team"}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => teamDocId && handleDeleteTeam(teamDocId, t.teamName)}
+                              disabled={!teamDocId || deletingTeamId === teamDocId}
+                              className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                            >
+                              {deletingTeamId === teamDocId ? "Deleting..." : "Delete"}
+                            </Button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
