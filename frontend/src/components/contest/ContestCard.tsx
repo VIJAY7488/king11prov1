@@ -45,9 +45,6 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
   const isFreeContest = contest.contestType === "FREE_LEAGUE" || Number(contest.entryFee) === 0;
   const joinedUsers = Math.max(0, Number(contest.filledSpots ?? 0));
   const previewWinners = joinedUsers > 0 ? Math.max(1, Math.ceil(joinedUsers * 0.1)) : 0;
-  const approxPerWinner = previewWinners > 0
-    ? Math.min(100, Math.floor((Number(contest.prizePool ?? 0) * 100) / previewWinners) / 100)
-    : 0;
 
   const team1Name = m?.team1Name ?? "Team 1";
   const team2Name = m?.team2Name ?? "Team 2";
@@ -130,11 +127,6 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
                 />
               </div>
             </div>
-          )}
-          {isFreeContest && (
-            <p className="mt-1.5 text-[0.68rem] text-[#7A6A55]">
-              Top 10% winners by rank get equal prize (max ₹100 each, ~₹{approxPerWinner.toLocaleString("en-IN")}).
-            </p>
           )}
         </div>
 
