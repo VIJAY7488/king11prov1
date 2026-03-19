@@ -230,7 +230,6 @@ export function TeamsPage() {
                     {!urlContestId && t.contestId && <p className="text-xs text-[#7A6A55]">Contest: {t.contestId}</p>}
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setViewTeam(t)}>View</Button>
                     {urlContestId ? (
                       isJoinedTeam ? (
                         <span className="inline-flex items-center px-3 py-1.5 rounded-lg border border-[#E8E0D4] bg-[#FAFAF8] text-xs font-bold text-[#7A6A55]">
