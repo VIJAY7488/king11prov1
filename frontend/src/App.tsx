@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppProvider } from "./context/AppContext";
 import { useAuthStore } from "./store/authStore";
 import { AnalyticsPageTracker } from "./components/analytics/AnalyticsPageTracker";
+import { RouteSeo } from "./components/seo/RouteSeo";
 import Navbar from "./components/layout/Navbar";
 import ToastContainer from "./components/ui/ToastContainer";
 import { AuthPage } from "./pages/AuthPage";
@@ -123,6 +124,7 @@ function AppLayout() {
 export default function App() {
   return (
     <BrowserRouter>
+      <RouteSeo />
       <AnalyticsPageTracker />
       <AppProvider>
         <Routes>

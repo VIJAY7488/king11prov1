@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /admin/
+Disallow: /profile
+Disallow: /teams
+Disallow: /joined-contests
+Disallow: /transactions
+Disallow: /login
+Disallow: /signup
+
+Sitemap: https://king11pro.live/sitemap.xml
