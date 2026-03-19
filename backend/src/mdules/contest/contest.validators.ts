@@ -25,11 +25,17 @@ export const createContestSchema = Joi.object({
     .messages({ 'any.only': `Contest type must be one of: ${Object.values(ContestType).join(', ')}` }),
 
   // Admin sets these two — everything else is derived
-  entryFee: Joi.number().min(1).precision(2).required()
-    .messages({
-      'number.base': 'Entry fee must be a number',
-      'number.min':  'Entry fee must be at least ₹1',
+    entryFee: Joi.when('contestType', {
+      is: ContestType.FREE_LEAGUE,
+      then: Joi.number().valid(0).required().messages({
+        'any.only': 'Entry fee must be 0 for FREE_LEAGUE contests',
+      }),
+       otherwise: Joi.number().min(1).precision(2).required().messages({
+        'number.base': 'Entry fee must be a number',
+        'number.min':  'Entry fee must be at least ₹1',
+      }),
     }),
+    
 
   prizePool: Joi.number().min(1).precision(2).required()
     .messages({
@@ -74,8 +80,8 @@ export const updateContestSchema = Joi.object({
 
   description: Joi.string().trim().max(1000).allow('').optional(),
 
-  entryFee: Joi.number().min(1).precision(2).optional()
-    .messages({ 'number.min': 'Entry fee must be at least ₹1' }),
+  entryFee: Joi.number().min(0).precision(2).optional()
+    .messages({ 'number.min': 'Entry fee cannot be negative' }),
 
   prizePool: Joi.number().min(1).precision(2).optional()
     .messages({ 'number.min': 'Prize pool must be at least ₹1' }),

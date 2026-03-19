@@ -1,8 +1,7 @@
 import mongoose, { ClientSession, Types } from "mongoose";
 import { calcFinancials, Contest, ContestEntry, IContest } from "./contest.model";
-import { ContestPublic, ContestQueryParams, ContestStatus, CreateContestDTO, JoinedContestPublic, PaginatedContests, PLATFORM_FEE_PERCENT, PrizeDistributionInput, PrizeDistributionResult, UpdateContestDTO } from "./contest.types";
+import { ContestPublic, ContestQueryParams, ContestStatus, ContestType, CreateContestDTO, JoinedContestPublic, PaginatedContests, PLATFORM_FEE_PERCENT, PrizeDistributionInput, PrizeDistributionResult, UpdateContestDTO } from "./contest.types";
 import AppError from "../../utils/AppError";
-import asyncHandler from "../../utils/asyncHandler";
 import { MatchStatus } from "../match/match.types";
 
 
@@ -236,6 +235,56 @@ export class ContestService {
     return { grossCollection: gross, platformFee, distributablePrizePool };
   }
 
+  generateFreeContestDistribution(prizePool: number, totalPlayers: number): PrizeDistributionResult {
+    if (!Number.isFinite(prizePool) || prizePool <= 0) {
+      throw new AppError('prizePool must be greater than 0.', 422);
+    }
+    if (!Number.isInteger(totalPlayers) || totalPlayers < 1) {
+      throw new AppError('totalPlayers must be at least 1.', 422);
+    }
+
+    const rankPrizesCents: number[] = new Array(totalPlayers).fill(0);
+
+    const totalCents = Math.round(prizePool * 100);
+    const totalWinners = Math.max(1, Math.ceil(totalPlayers * 0.1));
+    // Top 10% winners by rank, with payout capped at ₹100 each.
+    const payoutCents = Math.min(10000, Math.floor(totalCents / totalWinners));
+    for (let i = 0; i < totalWinners; i++) rankPrizesCents[i] = payoutCents;
+
+    const rankPrizes = rankPrizesCents.map((c) => round2(c / 100));
+
+    const distribution: PrizeDistributionResult["distribution"] = [];
+    let startRank = 1;
+    let currentAmount = rankPrizes[0];
+
+    for (let i = 2; i <= rankPrizes.length + 1; i++) {
+      const amount = i <= rankPrizes.length ? rankPrizes[i - 1] : Number.NaN;
+      if (amount !== currentAmount) {
+        const endRank = i - 1;
+        const winnersCount = endRank - startRank + 1;
+        distribution.push({
+          fromRank: startRank,
+          toRank: endRank,
+          winnersCount,
+          amountPerRank: currentAmount,
+          totalAmount: round2(currentAmount * winnersCount),
+        });
+        startRank = i;
+        currentAmount = amount;
+      }
+    }
+
+    return {
+      prizePool: round2(prizePool),
+      totalPlayers,
+      winnerPercentage: 10,
+      normalizedWinnerPercentage: 10,
+      totalWinners,
+      distribution,
+      rankPrizes,
+    };
+  }
+
   // ── ADMIN: Create Contest ──────────────────────────────────────────────────
   /**
    * Admin provides: matchId, name, contestType, entryFee, prizePool.
@@ -251,11 +300,18 @@ export class ContestService {
    * Default status is DRAFT — admin must explicitly set OPEN to make it visible.
    */
   async createContest(dto: CreateContestDTO): Promise<ContestPublic> {
+    if(dto.contestType === ContestType.FREE_LEAGUE && dto.entryFee !== 0) {
+      throw new AppError('FREE_LEAGUE contest must have entryFee = 0.', 422);
+    }
+    if(dto.contestType !== ContestType.FREE_LEAGUE && dto.entryFee <= 0){
+      throw new AppError('Paid contests must have entryFee greater than 0.', 422);
+    }
+
     // Pre-validate that the calculated totalSpots would be ≥ 2
     const { totalSpots } =
       calcFinancials(dto.prizePool, dto.entryFee);
 
-    if (totalSpots < 2) {
+    if (dto.contestType !== ContestType.FREE_LEAGUE && totalSpots < 2) {
       throw new AppError(
         `With prizePool ₹${dto.prizePool} and entryFee ₹${dto.entryFee}, ` +
         `totalSpots would be ${totalSpots}. ` +
@@ -327,6 +383,15 @@ export class ContestService {
       const refreshed = await Contest.findById(contestId);
       if (!refreshed) throw new AppError('Contest not found after completion.', 404);
       return toContestPublic(refreshed);
+    }
+
+    if(dto.entryFee !== undefined) {
+      if(contest.contestType === ContestType.FREE_LEAGUE && dto.entryFee !== 0) {
+        throw new AppError('FREE_LEAGUE contest must keep entryFee = 0.', 422);
+      }
+      if (contest.contestType !== ContestType.FREE_LEAGUE && dto.entryFee <= 0) {
+        throw new AppError('Paid contests must keep entryFee greater than 0.', 422);
+      }
     }
 
     // Build the update — pre-save hook recalculates financials if needed
@@ -429,6 +494,16 @@ export class ContestService {
       };
     }
 
+    if (contest.contestType === ContestType.FREE_LEAGUE) {
+      const result = this.generateFreeContestDistribution(contest.prizePool, totalPlayers);
+      return {
+        ...result,
+        grossCollection: 0,
+        platformFeePercent: 0,
+        platformFee: 0,
+      };
+    }
+
     const grossCollection = contest.entryFee * totalPlayers;
     const { distributablePrizePool, platformFee } = this.netPrizePoolFromCollection(grossCollection);
     const result = this.generatePrizeDistribution({
@@ -504,7 +579,6 @@ export class ContestService {
   // ── User: Join Contest ────────────────────────────────────────────────────
   async joinContest(userId: string, contestId: string, teamId: string) {
     const { Team } = await import('../team/team.model');
-    const { default: User } = await import('../user/users.model');
     const { ContestEntry } = await import('./contest.model');
     const { default: walletService } = await import('../wallet/wallet.service');
 
@@ -534,8 +608,6 @@ export class ContestService {
       if (team.contestId.toString() !== contestId)
         throw new AppError('This team belongs to a different contest.', 409);
 
-      const user = await User.findById(userId).session(session);
-      if (!user) throw new AppError('User not found.', 404);
 
       const [existingTeamEntry, userEntryCount] = await Promise.all([
         ContestEntry.findOne({
@@ -560,14 +632,19 @@ export class ContestService {
         );
       }
 
-      // Deduct entry fee using proper Wallet Service to create transaction logs
-      const walletResult = await walletService.deductForContest(
-        userId,
-        contestId,
-        teamId,
-        contest.entryFee,
-        session
-      );
+      let newBalance: number | undefined = undefined;
+      if(contest.contestType !== ContestType.FREE_LEAGUE) {
+        // Deduct entry fee using proper Wallet Service to create transaction logs
+        const walletResult = await walletService.deductForContest(
+          userId,
+          contestId,
+          teamId,
+          contest.entryFee,
+          session
+        );
+        newBalance = walletResult.currentBalance;
+      }
+
 
       // Increment filledSpots; flip to FULL if all spots taken
       const newFilled = contest.filledSpots + 1;
@@ -595,9 +672,9 @@ export class ContestService {
       );
 
       return {
-        message: 'Successfully joined the contest!',
+        message: contest.contestType === ContestType.FREE_LEAGUE ? 'Successfully joined the free contest!' : 'Successfully joined the contest!',
         entryFee: contest.entryFee,
-        newBalance: walletResult.currentBalance,
+        newBalance
       };
     });
   }

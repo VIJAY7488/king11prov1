@@ -152,7 +152,9 @@ export function JoinedContestsPage() {
                   </div>
                   <div className="bg-[#FAFAF8] rounded-xl p-3 border border-[#E8E0D4]">
                     <div className="text-xs text-[#7A6A55] mb-1">Entry Fee</div>
-                    <div className="font-display font-black text-2xl">₹{item.contest.entryFee}</div>
+                    <div className="font-display font-black text-2xl">
+                      {item.contest.entryFee === 0 ? "FREE" : `₹${item.contest.entryFee}`}
+                    </div>
                   </div>
                 </div>
 

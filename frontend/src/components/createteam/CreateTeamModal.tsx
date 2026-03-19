@@ -395,7 +395,9 @@ export function CreateTeamModal({
             className="w-full border-[1.5px] border-[#E8E0D4] rounded-xl px-3 py-2.5 text-sm font-semibold focus:outline-none focus:border-[#EA4800]">
             <option value="">— Pick a contest —</option>
             {contests.map((c) => (
-              <option key={c.id} value={c.id}>{c.name} (₹{c.entryFee} entry)</option>
+              <option key={c.id} value={c.id}>
+                {c.name} ({c.entryFee === 0 ? "FREE ENTRY" : `₹${c.entryFee} entry`})
+              </option>
             ))}
           </select>
         </div>

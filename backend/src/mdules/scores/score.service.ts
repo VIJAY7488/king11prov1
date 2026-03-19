@@ -5,7 +5,7 @@ import { PlayerScore, IPlayerScore }     from './score.model';
 import { ContestEntry, Contest }         from '../contest/contest.model';
 import { Team }                          from '../team/team.model';
 import { Match }                         from '../match/match.model';
-import { ContestStatus, PLATFORM_FEE_PERCENT } from '../contest/contest.types';
+import { ContestStatus, ContestType, PLATFORM_FEE_PERCENT } from '../contest/contest.types';
 import contestService                    from '../contest/contest.service';
 import walletService                     from '../wallet/wallet.service';
 import { MatchStatus }                   from '../match/match.types';
@@ -655,7 +655,7 @@ export class ScoreService {
     );
 
     // 4. Build final leaderboard snapshots
-    const contests = await Contest.find({ matchId }).select('_id name entryFee').lean();
+    const contests = await Contest.find({ matchId }).select('_id name entryFee prizePoll contestType').lean();
     const leaderboards: WsLeaderboardSnapshot[] = [];
 
     for (const contest of contests as any[]) {
@@ -678,13 +678,18 @@ export class ScoreService {
 
       // Credit winnings by final rank based on contest prize distribution.
       // Idempotent at wallet transaction level via referenceId.
-      const grossCollection = (contest.entryFee ?? 0) * rows.length;
-      const netPrizePool = Math.max(0, grossCollection * (1 - PLATFORM_FEE_PERCENT / 100));
-      const prizeDist = contestService.generatePrizeDistribution({
-        prizePool: Math.round(netPrizePool * 100) / 100,
-        totalPlayers: Math.max(1, rows.length),
-        winnerPercentage: 25,
-      });
+      const prizeDist = (contest as any).contestType === ContestType.FREE_LEAGUE 
+        ? contestService.generateFreeContestDistribution((contest as any).prizePool ?? 0, Math.max(1, entries.length))
+        : (() => {
+          const grossCollection = ((contest as any).entrFee ?? 0) * entries.length;
+          const netPrizePoll = Math.max(0, grossCollection * (1 - PLATFORM_FEE_PERCENT / 100));
+
+          return contestService.generatePrizeDistribution({
+            prizePool: Math.round(netPrizePoll * 100) / 100,
+            totalPlayers: Math.max(1, entries.length),
+            winnerPercentage: 25,
+          })
+        })();
 
       const leaderboardEntries: WsLeaderboardEntry[] = [];
       for (let i = 0; i < rows.length; i++) {

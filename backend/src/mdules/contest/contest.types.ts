@@ -13,6 +13,7 @@ export enum ContestType {
   HEAD_TO_HEAD = 'HEAD_TO_HEAD', // 2 players
   SMALL_LEAGUE = 'SMALL_LEAGUE', // 3–10 players
   MEGA_LEAGUE  = 'MEGA_LEAGUE',  // 11+ players
+  FREE_LEAGUE = 'FREE_LEAGUE'
 }
 
 

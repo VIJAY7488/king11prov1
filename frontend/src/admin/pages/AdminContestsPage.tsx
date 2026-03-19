@@ -33,6 +33,7 @@ export default function AdminContestsPage() {
     isGuaranteed: false, status: "DRAFT",
   });
   const [saving, setSaving] = useState(false);
+  const isFreeContest = form.contestType === "FREE_LEAGUE";
 
   // Patch status
   const [patchId,     setPatchId]     = useState("");
@@ -53,7 +54,7 @@ export default function AdminContestsPage() {
   function setF(k: string, v: unknown) { setForm((p) => ({ ...p, [k]: v })); }
 
   async function createContest() {
-    if (!form.matchId || !form.entryFee || !form.prizePool) {
+    if (!form.matchId || (!isFreeContest && !form.entryFee) || !form.prizePool) {
       setError("Fill all required fields."); return;
     }
     setSaving(true); setError("");
@@ -61,7 +62,7 @@ export default function AdminContestsPage() {
       await api.post("/contest", {
         ...form,
         entryFee: Number(form.entryFee),
-        prizePool: Number(form.prizePool),
+        prizePool: isFreeContest ? 0 : Number(form.prizePool),
         maxEntriesPerUser: Number(form.maxEntriesPerUser),
       });
       setShowForm(false);
@@ -111,8 +112,16 @@ export default function AdminContestsPage() {
             </div>
             <div>
               <label style={LABEL_STYLE}>Contest Type *</label>
-              <select value={form.contestType} onChange={(e) => setF("contestType", e.target.value)} style={{ ...INPUT_STYLE, appearance: "none" }}>
-                {["MEGA_LEAGUE", "HEAD_TO_HEAD", "SMALL_LEAGUE", "PRACTICE"].map((t) => <option key={t}>{t}</option>)}
+              <select 
+                value={form.contestType}
+                onChange={(e) => {
+                  const type = e.target.value;
+                  setF("contestType", type);
+                  if(type === "FREE_LEAGUE") setF("entryFee", "0");
+                }}
+                style={{...INPUT_STYLE, appearance: "none"}}>
+                  {["MEGA_LEAGUE", "HEAD_TO_HEAD", "SMALL_LEAGUE", "FREE_LEAGUE"].map((t) => 
+                <option key={t}>{t}</option>)}
               </select>
             </div>
             <div>
@@ -121,7 +130,14 @@ export default function AdminContestsPage() {
             </div>
             <div>
               <label style={LABEL_STYLE}>Prize Pool (₹) *</label>
-              <input type="number" value={form.prizePool} onChange={(e) => setF("prizePool", e.target.value)} placeholder="1000000" style={INPUT_STYLE} />
+              <input
+                type="number"
+                value={isFreeContest ? "0" : form.entryFee}
+                onChange={(e) => setF("entryFee", e.target.value)}
+                placeholder={isFreeContest ? "0 (free entry)" : "50"}
+                disabled={isFreeContest}
+                style={{ ...INPUT_STYLE, opacity: isFreeContest ? 0.7 : 1 }}
+              />
             </div>
             <div>
               <label style={LABEL_STYLE}>Max Entries / User</label>
@@ -140,7 +156,9 @@ export default function AdminContestsPage() {
             </div>
           </div>
           <div style={{ marginTop: 12, padding: "10px 14px", background: "#1A1A1A", borderRadius: 8, fontSize: 12, color: "#555" }}>
-            💡 totalSpots = floor((prizePool × 1.20) ÷ entryFee) — auto-calculated by backend
+            💡 {isFreeContest
+              ? "FREE_LEAGUE: entry fee stays ₹0, wallet is not deducted on join, and winners are computed from joined users."
+              : "totalSpots = floor((prizePool × 1.20) ÷ entryFee) — auto-calculated by backend"}
           </div>
           <button onClick={createContest} disabled={saving}
             style={{ marginTop: 16, padding: "10px 24px", border: "none", borderRadius: 8, background: saving ? "#064E3B" : "#10B981", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>

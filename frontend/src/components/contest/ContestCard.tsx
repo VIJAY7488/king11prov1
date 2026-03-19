@@ -42,6 +42,12 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
   const m = contest.match;
   const filled = Math.max(0, Math.min(100, contest.fillPercentage ?? 0));
   const available = Math.max(0, contest.availableSpots ?? (contest.totalSpots - contest.filledSpots));
+  const isFreeContest = contest.contestType === "FREE_LEAGUE" || Number(contest.entryFee) === 0;
+  const joinedUsers = Math.max(0, Number(contest.filledSpots ?? 0));
+  const previewWinners = joinedUsers > 0 ? Math.max(1, Math.ceil(joinedUsers * 0.1)) : 0;
+  const approxPerWinner = previewWinners > 0
+    ? Math.min(100, Math.floor((Number(contest.prizePool ?? 0) * 100) / previewWinners) / 100)
+    : 0;
 
   const team1Name = m?.team1Name ?? "Team 1";
   const team2Name = m?.team2Name ?? "Team 2";
@@ -96,7 +102,9 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
           </div>
           <div className="rounded-lg border border-[#E8E0D4] bg-[#FAFAF8] p-2">
             <p className="text-[0.62rem] uppercase tracking-wide text-[#7A6A55] font-bold">Entry</p>
-            <p className="font-display font-black text-[#1A1208] text-base">₹{contest.entryFee}</p>
+            <p className={`font-display font-black text-base ${isFreeContest ? "text-emerald-700" : "text-[#1A1208]"}`}>
+              {isFreeContest ? "FREE" : `₹${contest.entryFee}`}
+            </p>
           </div>
           <div className="rounded-lg border border-[#E8E0D4] bg-[#FAFAF8] p-2">
             <p className="text-[0.62rem] uppercase tracking-wide text-[#7A6A55] font-bold">Max Teams</p>
@@ -105,16 +113,29 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
         </div>
 
         <div className="mb-3">
-          <div className="flex justify-between text-[0.72rem] text-[#7A6A55] font-semibold mb-1.5">
-            <span>{filled}% filled</span>
-            <span>{available.toLocaleString("en-IN")} spots left</span>
-          </div>
-          <div className="h-2 bg-[#F0EBE1] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-[#EA4800] transition-all duration-500"
-              style={{ width: `${filled}%` }}
-            />
-          </div>
+          {isFreeContest ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[0.72rem] text-emerald-800 font-semibold">
+              Joined users: {joinedUsers.toLocaleString("en-IN")} · Winners: Top 10% ({previewWinners})
+            </div>
+          ) : (
+            <div>
+              <div className="flex justify-between text-[0.72rem] text-[#7A6A55] font-semibold mb-1.5">
+                <span>{filled}% filled</span>
+                <span>{available.toLocaleString("en-IN")} spots left</span>
+              </div>
+              <div className="h-2 bg-[#F0EBE1] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[#EA4800] transition-all duration-500"
+                  style={{ width: `${filled}%` }}
+                />
+              </div>
+            </div>
+          )}
+          {isFreeContest && (
+            <p className="mt-1.5 text-[0.68rem] text-[#7A6A55]">
+              Top 10% winners by rank get equal prize (max ₹100 each, ~₹{approxPerWinner.toLocaleString("en-IN")}).
+            </p>
+          )}
         </div>
 
         <button
@@ -127,7 +148,7 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
           }`}
         >
           {isJoinable
-            ? "Join Contest"
+            ? (isFreeContest ? "Join Free Contest" : "Join Contest")
             : canViewLive
               ? "View Live"
               : canCheckRank

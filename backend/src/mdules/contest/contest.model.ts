@@ -57,6 +57,13 @@ export function calcFinancials(prizePool: number, entryFee: number): {
     totalSpots: number;
 } 
 {
+    if(entryFee === 0) {
+        return {
+            platformFee: 0,
+            totalCollection: 0,
+            totalSpots: 100000,
+        }
+    }
     const platformFee     = Math.round(prizePool * PLATFORM_FEE_PERCENT / 100);
     const totalCollection = prizePool + platformFee;
     const totalSpots      = entryFee > 0 ? Math.floor(totalCollection / entryFee) : 0;
@@ -98,7 +105,7 @@ const contestSchema = new Schema<IContest, IContestModel>(
         entryFee: {
             type: Number,
             required: [true, 'Entry fee is required'],
-            min: [1, 'Entry fee must be at least ₹1'],
+            min: [0, 'Entry fee cannot be negative'],
         },
 
         prizePool: {
