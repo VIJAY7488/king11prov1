@@ -385,6 +385,47 @@ export class ContestService {
       return toContestPublic(refreshed);
     }
 
+    // Cancelling a contest must atomically refund all paid entries.
+    if (dto.status === ContestStatus.CANCELLED) {
+      const { default: walletService } = await import('../wallet/wallet.service');
+
+      return withTransaction(async (session) => {
+        const contestInTxn = await Contest.findOne({
+          _id: new Types.ObjectId(contestId),
+          status: contest.status,
+        }).session(session);
+
+        if (!contestInTxn) {
+          throw new AppError('Contest was updated by another admin. Refresh and retry.', 409);
+        }
+
+        const entries = await ContestEntry.find({ contestId: new Types.ObjectId(contestId) })
+          .select('_id userId entryFee')
+          .session(session)
+          .lean();
+
+        for (const entry of entries as Array<{ _id: Types.ObjectId; userId: Types.ObjectId; entryFee: number }>) {
+          if (!Number.isFinite(entry.entryFee) || entry.entryFee <= 0) continue;
+          await walletService.creditContestCancellationRefund(
+            entry.userId.toString(),
+            contestId,
+            entry._id.toString(),
+            entry.entryFee,
+            session
+          );
+        }
+
+        contestInTxn.status = ContestStatus.CANCELLED;
+        contestInTxn.cancelledAt = new Date();
+        if (dto.cancelReason !== undefined) {
+          contestInTxn.cancelReason = dto.cancelReason || null;
+        }
+
+        await contestInTxn.save({ session });
+        return toContestPublic(contestInTxn);
+      });
+    }
+
     if(dto.entryFee !== undefined) {
       if(contest.contestType === ContestType.FREE_LEAGUE && dto.entryFee !== 0) {
         throw new AppError('FREE_LEAGUE contest must keep entryFee = 0.', 422);

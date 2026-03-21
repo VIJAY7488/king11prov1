@@ -208,6 +208,65 @@ export class WalletService {
         return { transaction: toTransactionRecord(txn), currentBalance: balanceAfter };
     }
 
+    // ── INTERNAL: Refund for Contest Cancellation ────────────────────────────
+    /**
+     * Called by contest.service.updateContest() when status moves to CANCELLED.
+     * Must run inside the caller's Mongo session so contest status + refunds
+     * commit atomically.
+     */
+    async creditContestCancellationRefund(
+        userId: string,
+        contestId: string,
+        contestEntryId: string,
+        amount: number,
+        session: ClientSession
+    ): Promise<WalletOperationResult | null> {
+        if (!Number.isFinite(amount) || amount <= 0) return null;
+
+        const walletTxnRef = `REFUND:CANCELLED:${contestId}:${contestEntryId}`;
+        const existing = await Transaction.findOne({ referenceId: walletTxnRef }).session(session);
+        if (existing) {
+            return { transaction: toTransactionRecord(existing), currentBalance: existing.balanceAfter };
+        }
+
+        const updatedUser = await User.findOneAndUpdate(
+            { _id: new Types.ObjectId(userId), isActive: true },
+            { $inc: { walletBalance: amount } },
+            { new: true, session }
+        );
+
+        if (!updatedUser) {
+            const exists = await User.exists({ _id: userId }).session(session);
+            if (!exists) throw new AppError('User not found.', 404);
+            throw new AppError('Account is deactivated.', 403);
+        }
+
+        const balanceAfter = updatedUser.walletBalance;
+        const balanceBefore = balanceAfter - amount;
+
+        const [txn] = await Transaction.create(
+            [
+                {
+                    userId: updatedUser._id,
+                    type: TransactionType.REFUND,
+                    status: TransactionStatus.SUCCESS,
+                    amount,
+                    balanceBefore,
+                    balanceAfter,
+                    referenceId: walletTxnRef,
+                    metadata: {
+                        reason: 'CONTEST_CANCELLED',
+                        contestId,
+                        contestEntryId,
+                    },
+                }
+            ],
+            { session }
+        );
+
+        return { transaction: toTransactionRecord(txn), currentBalance: balanceAfter };
+    }
+
     // ── Read Operations ────────────────────────────────────────────────────────
 
     async getBalance(userId: string): Promise<number> {
