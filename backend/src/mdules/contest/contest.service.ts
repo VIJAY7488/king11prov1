@@ -516,7 +516,7 @@ export class ContestService {
   }
 
   async getContestPrizeDistribution(contestId: string, winnerPercentage = 25): Promise<PrizeDistributionResult> {
-    const contest = await Contest.findById(contestId).select('entryFee').lean();
+    const contest = await Contest.findById(contestId).select('entryFee contestType prizePool').lean();
     if (!contest) throw new AppError('Contest not found.', 404);
 
     const totalPlayers = await ContestEntry.countDocuments({ contestId: new Types.ObjectId(contestId) });
@@ -543,6 +543,10 @@ export class ContestService {
         platformFeePercent: 0,
         platformFee: 0,
       };
+    }
+
+    if (!Number.isFinite(contest.entryFee) || contest.entryFee <= 0) {
+      throw new AppError('Invalid contest entryFee for prize distribution.', 500);
     }
 
     const grossCollection = contest.entryFee * totalPlayers;
