@@ -655,7 +655,7 @@ export class ScoreService {
     );
 
     // 4. Build final leaderboard snapshots
-    const contests = await Contest.find({ matchId }).select('_id name entryFee prizePoll contestType').lean();
+    const contests = await Contest.find({ matchId }).select('_id name entryFee prizePool contestType').lean();
     const leaderboards: WsLeaderboardSnapshot[] = [];
 
     for (const contest of contests as any[]) {
@@ -681,11 +681,16 @@ export class ScoreService {
       const prizeDist = (contest as any).contestType === ContestType.FREE_LEAGUE 
         ? contestService.generateFreeContestDistribution((contest as any).prizePool ?? 0, Math.max(1, entries.length))
         : (() => {
-          const grossCollection = ((contest as any).entrFee ?? 0) * entries.length;
-          const netPrizePoll = Math.max(0, grossCollection * (1 - PLATFORM_FEE_PERCENT / 100));
+          const entryFee = Number((contest as any).entryFee ?? 0);
+          if (!Number.isFinite(entryFee) || entryFee <= 0) {
+            throw new AppError(`Invalid entryFee for contest ${contest._id.toString()} during payout settlement.`, 500);
+          }
+
+          const grossCollection = entryFee * entries.length;
+          const netPrizePool = Math.max(0, grossCollection * (1 - PLATFORM_FEE_PERCENT / 100));
 
           return contestService.generatePrizeDistribution({
-            prizePool: Math.round(netPrizePoll * 100) / 100,
+            prizePool: Math.round(netPrizePool * 100) / 100,
             totalPlayers: Math.max(1, entries.length),
             winnerPercentage: 25,
           })
