@@ -4,6 +4,7 @@ import { DismissalType } from './score.types';
 // ── BallEvent validator ───────────────────────────────────────────────────────
 
 export const ballEventSchema = Joi.object({
+  eventId:          Joi.string().trim().min(6).max(120).optional(),
   matchId:          Joi.string().required(),
 
   // Batter

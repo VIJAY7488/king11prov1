@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { Types } from 'mongoose';
 import redisClient                       from '../../config/redis.config';
 import { matchChannel }                  from '../../config/websocket';
@@ -66,6 +67,44 @@ const buildTieAwareRanks = <T>(items: T[], getPoints: (item: T) => number): numb
     }
   }
   return ranks;
+};
+
+const BALL_EVENT_PROCESSED_TTL_SECONDS = 7 * 24 * 60 * 60;
+const BALL_EVENT_LOCK_TTL_SECONDS = 60;
+
+const asBit = (value?: boolean): string => (value ? '1' : '0');
+
+const buildBallEventId = (dto: BallEventDTO): string => {
+  if (dto.eventId?.trim()) return dto.eventId.trim();
+
+  const raw = [
+    dto.matchId,
+    dto.battingPlayerId,
+    dto.bowlingPlayerId,
+    dto.fieldingPlayerId ?? '',
+    String(dto.overNumber),
+    String(dto.ballNumber),
+    String(dto.runs),
+    String(dto.runsConceded),
+    String(dto.ballsFaced),
+    asBit(dto.isDotBall),
+    asBit(dto.isFour),
+    asBit(dto.isSix),
+    asBit(dto.isOut),
+    dto.dismissalType ?? '',
+    asBit(dto.isWide),
+    asBit(dto.isNoBall),
+    asBit(dto.isMaiden),
+    asBit(dto.isCatch),
+    asBit(dto.isDirectRunOut),
+    asBit(dto.isIndirectRunOut),
+    asBit(dto.isStumping),
+    asBit(dto.isOverthrow),
+    String(dto.overthrowRuns ?? 0),
+    asBit(dto.overthrowIsBoundary),
+  ].join('|');
+
+  return createHash('sha1').update(raw).digest('hex');
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -410,35 +449,59 @@ export class ScoreService {
 
     const match = await Match.findById(matchId);
     if (!match) throw new AppError('Match not found.', 404);
+    if (match.status !== MatchStatus.LIVE) {
+      throw new AppError(`Cannot process ball events unless match is LIVE. Current status: ${match.status}.`, 409);
+    }
 
-    // ── Helper: resolve player in match squads, then upsert score document ──
-    const upsertScore = async (
-      playerId: string,
-      inc: Record<string, number>,
-      set?: Record<string, unknown>
-    ): Promise<IPlayerScore> => {
-      const t1 = match.team1Players.find(p => p._id.toString() === playerId);
-      const t2 = match.team2Players.find(p => p._id.toString() === playerId);
-      const mp = t1 ?? t2;
-      if (!mp) throw new AppError(`Player "${playerId}" not found in this match.`, 404);
+    const eventId = buildBallEventId(dto);
+    const processedKey = `scores:ball:processed:${matchId}:${eventId}`;
+    const lockKey = `scores:ball:lock:${matchId}:${eventId}`;
 
-      return PlayerScore.findOneAndUpdate(
-        { matchId: matchObjId, playerId },
-        {
-          $setOnInsert: {
-            matchId:    matchObjId,
-            playerId,
-            playerName: mp.name,
-            playerRole: mp.role,
-            teamName:   t1 ? match.team1Name : match.team2Name,
-            teamSlot:   t1 ? 'team1' : 'team2',
+    const alreadyProcessed = await redisClient.exists(processedKey);
+    if (alreadyProcessed) {
+      throw new AppError('This ball event has already been processed.', 409);
+    }
+
+    const lockAcquired = await redisClient.set(
+      lockKey,
+      '1',
+      'EX',
+      BALL_EVENT_LOCK_TTL_SECONDS,
+      'NX'
+    );
+    if (lockAcquired !== 'OK') {
+      throw new AppError('This ball event is already being processed. Please retry shortly.', 409);
+    }
+
+    try {
+      // ── Helper: resolve player in match squads, then upsert score document ──
+      const upsertScore = async (
+        playerId: string,
+        inc: Record<string, number>,
+        set?: Record<string, unknown>
+      ): Promise<IPlayerScore> => {
+        const t1 = match.team1Players.find(p => p._id.toString() === playerId);
+        const t2 = match.team2Players.find(p => p._id.toString() === playerId);
+        const mp = t1 ?? t2;
+        if (!mp) throw new AppError(`Player "${playerId}" not found in this match.`, 404);
+
+        return PlayerScore.findOneAndUpdate(
+          { matchId: matchObjId, playerId },
+          {
+            $setOnInsert: {
+              matchId:    matchObjId,
+              playerId,
+              playerName: mp.name,
+              playerRole: mp.role,
+              teamName:   t1 ? match.team1Name : match.team2Name,
+              teamSlot:   t1 ? 'team1' : 'team2',
+            },
+            $inc: inc,
+            ...(set ? { $set: set } : {}),
           },
-          $inc: inc,
-          ...(set ? { $set: set } : {}),
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      ) as Promise<IPlayerScore>;
-    };
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        ) as Promise<IPlayerScore>;
+      };
 
     // ── 1. Batter ─────────────────────────────────────────────────────────
     // Runs: include overthrow runs (batter earns +1 per run regardless of source).
@@ -459,8 +522,8 @@ export class ScoreService {
       batterSet['dismissalType'] = dto.dismissalType ?? DismissalType.NOT_OUT;
     }
 
-    const updatedBatter = await upsertScore(dto.battingPlayerId, batterInc, batterSet);
-    affectedIds.push(dto.battingPlayerId);
+      const updatedBatter = await upsertScore(dto.battingPlayerId, batterInc, batterSet);
+      affectedIds.push(dto.battingPlayerId);
 
     // ── 2. Bowler ─────────────────────────────────────────────────────────
     const bowlerInc: Record<string, number> = { runsConceded: dto.runsConceded };
@@ -482,55 +545,64 @@ export class ScoreService {
 
     if (dto.isMaiden) bowlerInc['maidenOvers'] = 1;
 
-    const updatedBowler = await upsertScore(dto.bowlingPlayerId, bowlerInc);
-    if (isLegalDelivery) {
-      updatedBowler.oversBowled = addLegalBallsToOvers(updatedBowler.oversBowled, 1);
-    }
-    affectedIds.push(dto.bowlingPlayerId);
+      const updatedBowler = await upsertScore(dto.bowlingPlayerId, bowlerInc);
+      if (isLegalDelivery) {
+        updatedBowler.oversBowled = addLegalBallsToOvers(updatedBowler.oversBowled, 1);
+      }
+      affectedIds.push(dto.bowlingPlayerId);
 
     // ── 3. Fielder ────────────────────────────────────────────────────────
-    let updatedFielder: IPlayerScore | null = null;
-    if (dto.fieldingPlayerId && dto.isOut) {
-      const fielderInc: Record<string, number> = {};
-      if (dto.isCatch)          fielderInc['catches']         = 1;
-      if (dto.isDirectRunOut)   fielderInc['directRunOuts']   = 1;
-      if (dto.isIndirectRunOut) fielderInc['indirectRunOuts'] = 1;
-      if (dto.isStumping)       fielderInc['stumpings']       = 1;
+      let updatedFielder: IPlayerScore | null = null;
+      if (dto.fieldingPlayerId && dto.isOut) {
+        const fielderInc: Record<string, number> = {};
+        if (dto.isCatch)          fielderInc['catches']         = 1;
+        if (dto.isDirectRunOut)   fielderInc['directRunOuts']   = 1;
+        if (dto.isIndirectRunOut) fielderInc['indirectRunOuts'] = 1;
+        if (dto.isStumping)       fielderInc['stumpings']       = 1;
 
-      if (Object.keys(fielderInc).length) {
-        updatedFielder = await upsertScore(dto.fieldingPlayerId, fielderInc);
-        affectedIds.push(dto.fieldingPlayerId);
+        if (Object.keys(fielderInc).length) {
+          updatedFielder = await upsertScore(dto.fieldingPlayerId, fielderInc);
+          affectedIds.push(dto.fieldingPlayerId);
+        }
       }
-    }
 
     // ── 4. Recalculate fantasyPoints ──────────────────────────────────────
-    const toRecalc = ([updatedBatter, updatedBowler, updatedFielder]
-      .filter(Boolean)) as IPlayerScore[];
+      const toRecalc = ([updatedBatter, updatedBowler, updatedFielder]
+        .filter(Boolean)) as IPlayerScore[];
 
-    const updatedScores: IPlayerScore[] = [];
-    for (const score of toRecalc) {
-      score.fantasyPoints = calculateFantasyPoints(score);
-      await score.save();
-      updatedScores.push(score);
-    }
+      const updatedScores: IPlayerScore[] = [];
+      for (const score of toRecalc) {
+        score.fantasyPoints = calculateFantasyPoints(score);
+        await score.save();
+        updatedScores.push(score);
+      }
 
     // ── 5. Recalculate leaderboards ───────────────────────────────────────
-    const leaderboards = await recalculateLeaderboards(matchId, affectedIds);
+      const leaderboards = await recalculateLeaderboards(matchId, affectedIds);
 
     // ── 6. Build event and publish to Redis (WS fans out to clients) ──────
-    const event: WsBallProcessedEvent = {
-      type:           'BALL_PROCESSED',
-      matchId,
-      over:           dto.overNumber,
-      ball:           dto.ballNumber,
-      updatedPlayers: updatedScores.map(toPublic),
-      leaderboards,
-      processedAt:    new Date().toISOString(),
-    };
+      const event: WsBallProcessedEvent = {
+        type:           'BALL_PROCESSED',
+        matchId,
+        over:           dto.overNumber,
+        ball:           dto.ballNumber,
+        updatedPlayers: updatedScores.map(toPublic),
+        leaderboards,
+        processedAt:    new Date().toISOString(),
+      };
 
-    await redisClient.publish(matchChannel(matchId), JSON.stringify(event));
+      await redisClient.publish(matchChannel(matchId), JSON.stringify(event));
+      await redisClient.set(
+        processedKey,
+        new Date().toISOString(),
+        'EX',
+        BALL_EVENT_PROCESSED_TTL_SECONDS
+      );
 
-    return event;
+      return event;
+    } finally {
+      await redisClient.del(lockKey);
+    }
   }
 
   /**

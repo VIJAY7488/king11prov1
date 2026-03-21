@@ -24,6 +24,8 @@ export enum DismissalType {
  * leaderboard re-ranking and WebSocket broadcasts.
  */
 export interface BallEventDTO {
+  /** Optional client-supplied idempotency key for this delivery event. */
+  eventId?: string;
   matchId: string;
 
   // ── Batter ────────────────────────────────────────────────────────────────
