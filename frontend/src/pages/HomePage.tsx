@@ -109,7 +109,7 @@ const Homepage = () => {
     useEffect(() => {
       if (!token) return;
       const id = setInterval(() => {
-        setReferralSlide((prev) => (prev + 1) % 3);
+        setReferralSlide((prev) => (prev + 1) % 2);
       }, 3800);
       return () => clearInterval(id);
     }, [token]);
@@ -260,38 +260,29 @@ const Homepage = () => {
 
                       <div className="relative p-4 sm:p-5">
                         {referralSlide === 0 && (
-                          <div>
-                            <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">Your Invite Code</p>
-                            <p className="font-display font-black text-3xl tracking-wider">{referralSummary?.referralCode ?? "KING------"}</p>
-                            <p className="text-xs text-white/65 mt-2">Share this code. You earn after their first approved deposit.</p>
-                            <div className="mt-4">
-                              <button onClick={shareReferralLink} className="px-4 py-2 rounded-lg bg-[#EA4800] text-white text-xs font-bold hover:bg-[#FF5A1A] transition-colors">Share Link</button>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 items-stretch">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">Your Invite Code</p>
+                              <p className="font-display font-black text-3xl tracking-wider">{referralSummary?.referralCode ?? "KING------"}</p>
+                              <p className="text-xs text-white/65 mt-2">Share link and earn after their first approved deposit.</p>
+                              <div className="mt-4">
+                                <button onClick={shareReferralLink} className="px-4 py-2 rounded-lg bg-[#EA4800] text-white text-xs font-bold hover:bg-[#FF5A1A] transition-colors">Share Link</button>
+                              </div>
+                            </div>
+
+                            <div className="rounded-lg border border-white/20 bg-white/10 p-3">
+                              <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">How It Works</p>
+                              <div className="space-y-1.5 text-sm">
+                                <p>1. Friend opens your referral link</p>
+                                <p>2. Friend signs up and deposits first time</p>
+                                <p>3. You get ₹{(referralSummary?.rewardPerReferral ?? 50).toLocaleString("en-IN")} bonus</p>
+                              </div>
+                              <p className="text-[11px] text-white/65 mt-2">Bonus is non-withdrawable, usable in contests.</p>
                             </div>
                           </div>
                         )}
 
                         {referralSlide === 1 && (
-                          <div>
-                            <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">Rewards Snapshot</p>
-                            <div className="grid grid-cols-3 gap-2">
-                              <div className="rounded-lg bg-white/10 border border-white/15 p-2">
-                                <p className="text-[10px] text-white/65 uppercase">Total</p>
-                                <p className="font-black text-lg">{referralSummary?.totalReferrals ?? 0}</p>
-                              </div>
-                              <div className="rounded-lg bg-white/10 border border-white/15 p-2">
-                                <p className="text-[10px] text-white/65 uppercase">Rewarded</p>
-                                <p className="font-black text-lg">{referralSummary?.rewardedReferrals ?? 0}</p>
-                              </div>
-                              <div className="rounded-lg bg-white/10 border border-white/15 p-2">
-                                <p className="text-[10px] text-white/65 uppercase">Bonus</p>
-                                <p className="font-black text-lg">₹{(referralSummary?.totalBonusEarned ?? 0).toLocaleString("en-IN")}</p>
-                              </div>
-                            </div>
-                            <p className="text-xs text-white/65 mt-3">₹{(referralSummary?.rewardPerReferral ?? 50).toLocaleString("en-IN")} per successful referral.</p>
-                          </div>
-                        )}
-
-                        {referralSlide === 2 && (
                           <div>
                             <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">How It Works</p>
                             <div className="space-y-1.5 text-sm">
@@ -306,7 +297,7 @@ const Homepage = () => {
                     </div>
 
                     <div className="flex items-center justify-center gap-2 mt-3">
-                      {[0, 1, 2].map((idx) => (
+                      {[0, 1].map((idx) => (
                         <button
                           key={idx}
                           onClick={() => setReferralSlide(idx)}
