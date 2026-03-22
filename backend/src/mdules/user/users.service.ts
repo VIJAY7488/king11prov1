@@ -41,19 +41,17 @@ const toPublicProfile = (user: IUser): UserPublicProfile => ({
     createdAt: user.createdAt,
 })
 
-const buildCandidateReferralCode = (name: string): string => {
-    const cleanName = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    const prefix = (cleanName || 'KING').slice(0, 6);
-    const suffix = Math.floor(1000 + Math.random() * 9000).toString();
-    return `${prefix}${suffix}`;
+const buildCandidateReferralCode = (): string => {
+    const suffix = Math.floor(100000 + Math.random() * 900000).toString();
+    return `KING${suffix}`;
 };
 
 
 // ── Service ───────────────────────────────────────────────────────────────────
 export class UserService {
-    private async generateUniqueReferralCode(name: string): Promise<string> {
+    private async generateUniqueReferralCode(_name: string): Promise<string> {
         for (let i = 0; i < 20; i += 1) {
-            const code = buildCandidateReferralCode(name);
+            const code = buildCandidateReferralCode();
             const existing = await User.exists({ referralCode: code });
             if (!existing) return code;
         }
