@@ -97,6 +97,8 @@ export function ProfilePage() {
     }
   }
 
+  const referralLink = buildReferralLink(referralSummary?.referralCode || user?.referralCode || "");
+
   const menuItems: Array<[string, string, (() => void) | null, boolean]> = [
     ["🏏", "Matches",         () => navigate("/matches"), false],
     ["👕", "My Teams",        () => navigate("/teams"),   false],
@@ -161,10 +163,18 @@ export function ProfilePage() {
         <div className="p-4">
           <div className="rounded-xl border border-[#E8E0D4] bg-[#FAFAF8] p-3 mb-3">
             <div className="text-xs font-semibold uppercase tracking-wide text-[#7A6A55] mb-1">Your Referral Link</div>
-            <div className="flex items-center justify-between gap-3">
-              <div className="font-display font-black text-xl tracking-wide text-[#1A1208]">
-                {referralSummary?.referralCode ?? user?.referralCode ?? "—"}
-              </div>
+            <div className="flex items-start justify-between gap-3">
+              <a
+                href={referralLink || "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm font-semibold text-[#1A1208] hover:text-[#EA4800] underline break-all"
+                onClick={(e) => {
+                  if (!referralLink) e.preventDefault();
+                }}
+              >
+                {referralLink || "—"}
+              </a>
               <Button size="sm" onClick={copyReferralLink}>Copy Link</Button>
             </div>
           </div>

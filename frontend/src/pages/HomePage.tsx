@@ -265,6 +265,17 @@ const Homepage = () => {
                               <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">Your Invite Code</p>
                               <p className="font-display font-black text-3xl tracking-wider">{referralSummary?.referralCode ?? "KING------"}</p>
                               <p className="text-xs text-white/65 mt-2">Share link and earn after their first approved deposit.</p>
+                              <a
+                                href={buildReferralLink(referralSummary?.referralCode ?? "") || "#"}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-2 inline-block text-[11px] text-[#FFD7BC] underline break-all"
+                                onClick={(e) => {
+                                  if (!referralSummary?.referralCode) e.preventDefault();
+                                }}
+                              >
+                                {buildReferralLink(referralSummary?.referralCode ?? "")}
+                              </a>
                               <div className="mt-4">
                                 <button onClick={shareReferralLink} className="px-4 py-2 rounded-lg bg-[#EA4800] text-white text-xs font-bold hover:bg-[#FF5A1A] transition-colors">Share Link</button>
                               </div>
