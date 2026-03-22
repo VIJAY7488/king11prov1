@@ -8,6 +8,28 @@ import { AddMoneyModal } from "@/components/wallet/AddMoneyModal";
 import { WithdrawMoneyModal } from "@/components/wallet/WithdrawMoneyModal";
 import { Button } from "@/components/ui/button";
 
+type ReferralSummary = {
+  referralCode: string;
+  totalReferrals: number;
+  rewardedReferrals: number;
+  pendingReferrals: number;
+  totalBonusEarned: number;
+  rewardPerReferral: number;
+};
+
+type ReferralHistoryItem = {
+  id: string;
+  referredUserId: string;
+  referredUserName?: string;
+  referredUserMobile?: string;
+  referralCodeUsed: string;
+  rewardAmount: number;
+  rewardStatus: "PENDING" | "QUALIFIED" | "REWARDED";
+  referredFirstDepositAt?: string;
+  rewardedAt?: string;
+  createdAt: string;
+};
+
 export function ProfilePage() {
   const navigate = useNavigate();
   const user   = useAuthStore((s) => s.user);
@@ -16,14 +38,27 @@ export function ProfilePage() {
   const [addMoneyModal, setAddMoneyModal] = useState(false);
   const [withdrawMoneyModal, setWithdrawMoneyModal] = useState(false);
   const [recentWithdrawals, setRecentWithdrawals] = useState<any[]>([]);
+  const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
+  const [referralHistory, setReferralHistory] = useState<ReferralHistoryItem[]>([]);
 
   useEffect(() => {
     refreshWallet();
-    api.get("/users/withdrawals/my?limit=5")
-      .then((res) => setRecentWithdrawals(res.data?.data?.withdrawals ?? []))
+
+    void Promise.all([
+      api.get("/users/withdrawals/my?limit=5"),
+      api.get("/users/me/referral"),
+      api.get("/users/me/referrals/history?limit=8"),
+    ])
+      .then(([withdrawalsRes, referralSummaryRes, referralHistoryRes]) => {
+        setRecentWithdrawals(withdrawalsRes.data?.data?.withdrawals ?? []);
+        setReferralSummary(referralSummaryRes.data?.data?.summary ?? null);
+        setReferralHistory(referralHistoryRes.data?.data?.referrals ?? []);
+      })
       .catch((err) => {
         setRecentWithdrawals([]);
-        toast({ type: "error", icon: "❌", msg: getErrorMessage(err, "Failed to load recent withdrawals") });
+        setReferralSummary(null);
+        setReferralHistory([]);
+        toast({ type: "error", icon: "❌", msg: getErrorMessage(err, "Failed to load profile data") });
       });
   }, []);
 
@@ -42,6 +77,21 @@ export function ProfilePage() {
     void logout().finally(() => {
       navigate("/");
     });
+  }
+
+  async function copyReferralCode() {
+    const code = referralSummary?.referralCode || user?.referralCode;
+    if (!code) {
+      toast({ type: "error", icon: "❌", msg: "Referral code not available yet" });
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(code);
+      toast({ type: "success", icon: "✅", msg: "Referral code copied" });
+    } catch {
+      toast({ type: "error", icon: "❌", msg: "Failed to copy referral code" });
+    }
   }
 
   const menuItems: Array<[string, string, (() => void) | null, boolean]> = [
@@ -95,6 +145,77 @@ export function ProfilePage() {
         <div className="p-5 flex gap-3">
           <Button className="flex-1" onClick={() => setAddMoneyModal(true)}>💰 Add Money</Button>
           <Button variant="outline" className="flex-1" onClick={() => setWithdrawMoneyModal(true)}>💸 Withdraw</Button>
+        </div>
+      </div>
+
+      {/* Referral section */}
+      <div className="bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl overflow-hidden shadow-sm mb-5" style={{ borderTopWidth: 3, borderTopColor: "#EA4800" }}>
+        <div className="bg-[#F4F1EC] border-b-[1.5px] border-[#E8E0D4] px-5 py-3.5 flex items-center justify-between gap-3">
+          <span className="font-display font-bold text-base">🎁 Refer & Earn</span>
+          <span className="text-xs font-bold text-[#7A6A55]">₹{(referralSummary?.rewardPerReferral ?? 50).toLocaleString("en-IN")} per referral</span>
+        </div>
+
+        <div className="p-4">
+          <div className="rounded-xl border border-[#E8E0D4] bg-[#FAFAF8] p-3 mb-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-[#7A6A55] mb-1">Your Referral Code</div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="font-display font-black text-xl tracking-wide text-[#1A1208]">
+                {referralSummary?.referralCode ?? user?.referralCode ?? "—"}
+              </div>
+              <Button size="sm" onClick={copyReferralCode}>Copy</Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+            <div className="rounded-lg border border-[#E8E0D4] p-2.5 bg-white">
+              <div className="text-[11px] text-[#7A6A55] font-semibold uppercase">Total</div>
+              <div className="font-black text-lg text-[#1A1208]">{referralSummary?.totalReferrals ?? 0}</div>
+            </div>
+            <div className="rounded-lg border border-[#E8E0D4] p-2.5 bg-white">
+              <div className="text-[11px] text-[#7A6A55] font-semibold uppercase">Rewarded</div>
+              <div className="font-black text-lg text-green-700">{referralSummary?.rewardedReferrals ?? 0}</div>
+            </div>
+            <div className="rounded-lg border border-[#E8E0D4] p-2.5 bg-white">
+              <div className="text-[11px] text-[#7A6A55] font-semibold uppercase">Pending</div>
+              <div className="font-black text-lg text-amber-700">{referralSummary?.pendingReferrals ?? 0}</div>
+            </div>
+            <div className="rounded-lg border border-[#E8E0D4] p-2.5 bg-white">
+              <div className="text-[11px] text-[#7A6A55] font-semibold uppercase">Bonus Earned</div>
+              <div className="font-black text-lg text-[#EA4800]">₹{(referralSummary?.totalBonusEarned ?? 0).toLocaleString("en-IN")}</div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-sm font-bold text-[#3D3020] mb-2">Referred Users</div>
+            {referralHistory.length === 0 ? (
+              <p className="text-sm text-[#7A6A55]">No referred users yet. Share your code to start earning.</p>
+            ) : (
+              <div className="space-y-2">
+                {referralHistory.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#FAFAF8] border border-[#E8E0D4]">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-[#1A1208] truncate">{item.referredUserName || item.referredUserMobile || "User"}</div>
+                      <div className="text-xs text-[#7A6A55]">
+                        Joined {new Date(item.createdAt).toLocaleDateString("en-IN")}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-[#1A1208]">₹{Number(item.rewardAmount ?? 0).toLocaleString("en-IN")}</div>
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                        item.rewardStatus === "REWARDED"
+                          ? "bg-green-100 text-green-700"
+                          : item.rewardStatus === "QUALIFIED"
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-amber-100 text-amber-700"
+                      }`}>
+                        {item.rewardStatus}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

@@ -8,6 +8,9 @@ export interface AuthUser {
   mobileNumber: string;
   role: string;
   walletBalance: number;
+  withdrawableBalance?: number;
+  nonWithdrawableBonusBalance?: number;
+  referralCode?: string;
   isActive: boolean;
   createdAt: string;
 }
@@ -23,6 +26,7 @@ interface AuthState {
     name: string;
     mobileNumber: string;
     password: string;
+    referralCode?: string;
   }) => Promise<void>;
   fetchProfile: () => Promise<void>;
   updateWalletBalance: (balance: number) => void;
