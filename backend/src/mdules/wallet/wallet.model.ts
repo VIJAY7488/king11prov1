@@ -98,7 +98,7 @@ transactionSchema.index({ referenceId: 1 }, { sparse: true });  // idempotency l
 // ── Static: getBalanceSummary ─────────────────────────────────────────────────
 transactionSchema.statics.getBalanceSummary = async function (userId: Types.ObjectId):
   Promise<{ totalDeposited: number; totalDeducted: number; transactionCount: number }> {
-    const CREDIT_TYPES = [TransactionType.DEPOSIT, TransactionType.REFERRAL_BONUS, TransactionType.REFUND, TransactionType.WIN_PRIZE];
+    const CREDIT_TYPES = [TransactionType.DEPOSIT, TransactionType.DEPOSIT_BONUS, TransactionType.REFERRAL_BONUS, TransactionType.REFUND, TransactionType.WIN_PRIZE];
     const DEBIT_TYPES  = [TransactionType.DEDUCTION, TransactionType.JOIN_CONTEST];
 
     const [result] = await this.aggregate([

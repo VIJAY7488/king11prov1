@@ -22,6 +22,15 @@ export const createDepositSchema = Joi.object({
     .required()
     .messages({ 'string.empty': 'Reference number is required' }),
 
+  bonusCode: Joi.string()
+    .trim()
+    .uppercase()
+    .alphanum()
+    .min(6)
+    .max(30)
+    .empty('')
+    .optional(),
+
 });
 
 export const reviewDepositSchema = Joi.object({

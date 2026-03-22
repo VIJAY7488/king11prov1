@@ -8,6 +8,7 @@ export interface IDeposit extends Document {
   userId: Types.ObjectId;
   amount: number;
   refNumber: string;          // UTR / payment gateway ref — stored as string
+  bonusCode?: string;
   status: DepositStatus;             // user-supplied note      // rejection reason or approval comment
   reviewedBy?: Types.ObjectId;
   reviewedAt?: Date;
@@ -46,6 +47,15 @@ const depositSchema = new Schema<IDeposit, IDepositModel>(
       required: [true, 'Reference number is required'],
       trim: true,
       maxlength: [100, 'Reference number cannot exceed 100 characters'],
+    },
+
+    bonusCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      minlength: [6, 'Bonus code must be at least 6 characters'],
+      maxlength: [30, 'Bonus code cannot exceed 30 characters'],
+      default: undefined,
     },
 
     status: {
@@ -116,6 +126,5 @@ depositSchema.statics.hasPendingDeposit = async function (
 
 const Deposit = model<IDeposit, IDepositModel>('Deposit', depositSchema);
 export default Deposit;
-
 
 

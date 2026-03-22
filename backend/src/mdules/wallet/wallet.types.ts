@@ -6,6 +6,7 @@ import { Types } from 'mongoose';
 
 export enum TransactionType {
     DEPOSIT      = 'DEPOSIT',      // credited via approved Deposit request
+    DEPOSIT_BONUS = 'DEPOSIT_BONUS', // non-withdrawable bonus on eligible deposits
     REFERRAL_BONUS = 'REFERRAL_BONUS', // non-withdrawable bonus credited to referrer
     DEDUCTION    = 'DEDUCTION',    // manual admin deduction
     REFUND       = 'REFUND',       // contest entry refund
@@ -30,6 +31,14 @@ export interface CreditFromDepositDTO {
     depositId: string;    // Deposit._id — used to build idempotency key
     refNumber: string;    // payment reference for description
     approvedBy: string;   // admin userId
+}
+
+export interface CreditDepositBonusDTO {
+    bonusAmount: number;
+    depositId: string;
+    refNumber: string;
+    approvedBy: string;
+    bonusPercent: number;
 }
 
 

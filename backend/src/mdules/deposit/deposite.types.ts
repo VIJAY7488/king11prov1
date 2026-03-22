@@ -14,6 +14,7 @@ export enum DepositStatus {
 export interface CreateDepositDTO {
   amount: number;
   refNumber: string;         // payment reference / UTR number — always a string
+  bonusCode?: string;
 }
 
 export interface ReviewDepositDTO {
@@ -35,6 +36,7 @@ export interface DepositPublic {
   userId: string;
   amount: number;
   refNumber: string;
+  bonusCode?: string;
   status: DepositStatus;
   reviewedAt?: Date;
   walletTransactionId?: string;  // set after approval credits the wallet
@@ -48,6 +50,8 @@ export interface ApproveDepositResult {
   deposit: DepositPublic;
   walletBalance: number;         // balance after credit
   walletTransactionId: string;   // cross-link to the wallet ledger
+  bonusCredited: number;
+  walletBonusTransactionId?: string;
 }
 
 

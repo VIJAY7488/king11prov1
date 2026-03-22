@@ -57,13 +57,18 @@ export class DepositController {
 
     if (status === DepositStatus.APPROVED) {
       const result = await depositService.approveDeposit(depositId, adminId);
+      const bonusText = result.bonusCredited > 0
+        ? ` + ₹${result.bonusCredited} bonus (non-withdrawable, code: KING11PRO50)`
+        : '';
       res.status(200).json({
         status: 'success',
-        message: `Deposit approved. ₹${result.deposit.amount} credited to user wallet.`,
+        message: `Deposit approved. ₹${result.deposit.amount} credited${bonusText}.`,
         data: {
           deposit: result.deposit,
           walletBalance: result.walletBalance,
           walletTransactionId: result.walletTransactionId,
+          bonusCredited: result.bonusCredited,
+          walletBonusTransactionId: result.walletBonusTransactionId,
         },
       });
     } else if (status === DepositStatus.REJECTED) {

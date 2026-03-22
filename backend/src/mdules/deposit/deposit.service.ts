@@ -6,6 +6,10 @@ import User from '../user/users.model';
 import walletService from '../wallet/wallet.service';
 import referralService from '../referral/referral.service';
 
+const DEPOSIT_BONUS_MIN_AMOUNT = 50;
+const DEPOSIT_BONUS_PERCENT = 50;
+const DEPOSIT_BONUS_CODE = 'KING11PRO50';
+const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 
 // ── Shape Mapper ──────────────────────────────────────────────────────────────
@@ -15,6 +19,7 @@ const toDepositPublic = (doc: IDeposit): DepositPublic => ({
   userId: doc.userId.toString(),
   amount: doc.amount,
   refNumber: doc.refNumber,
+  bonusCode: doc.bonusCode,
   status: doc.status,
   reviewedAt: doc.reviewedAt,
   walletTransactionId: doc.walletTransactionId,
@@ -79,6 +84,7 @@ export class DepositService {
       userId: new Types.ObjectId(userId),
       amount: dto.amount,
       refNumber: dto.refNumber,
+      bonusCode: dto.bonusCode?.trim().toUpperCase() || undefined,
       status: DepositStatus.PENDING,
     });
 
@@ -172,6 +178,27 @@ export class DepositService {
         session  // ← passes the live session in — single atomic boundary
       );
 
+      const isBonusCodeMatched = (deposit.bonusCode || '').toUpperCase() === DEPOSIT_BONUS_CODE;
+      const bonusCredited = (deposit.amount >= DEPOSIT_BONUS_MIN_AMOUNT && isBonusCodeMatched)
+        ? round2((deposit.amount * DEPOSIT_BONUS_PERCENT) / 100)
+        : 0;
+      let walletBonusTransactionId: string | undefined;
+
+      if (bonusCredited > 0) {
+        await walletService.creditDepositBonus(
+          deposit.userId.toString(),
+          {
+            bonusAmount: bonusCredited,
+            depositId,
+            refNumber: deposit.refNumber,
+            approvedBy: adminId,
+            bonusPercent: DEPOSIT_BONUS_PERCENT,
+          },
+          session
+        );
+        walletBonusTransactionId = `DEPOSIT:BONUS:${depositId}`;
+      }
+
       await referralService.rewardReferrerOnFirstApprovedDeposit(
         deposit.userId.toString(),
         depositId,
@@ -180,8 +207,10 @@ export class DepositService {
 
       return {
         deposit: toDepositPublic(updatedDeposit),
-        walletBalance: walletResult.currentBalance,
+        walletBalance: walletResult.currentBalance + bonusCredited,
         walletTransactionId: walletTxnRef,
+        bonusCredited,
+        walletBonusTransactionId,
       };
     });
   };
@@ -234,6 +263,7 @@ export class DepositService {
         userMobile: d.userId?.mobileNumber,
         amount: d.amount,
         refNumber: d.refNumber,
+        bonusCode: d.bonusCode,
         status: d.status,
         reviewedAt: d.reviewedAt,
         walletTransactionId: d.walletTransactionId,

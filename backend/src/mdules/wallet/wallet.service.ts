@@ -1,6 +1,6 @@
 import mongoose, { Types } from "mongoose"
 import Transaction from "./wallet.model"
-import { CreditFromDepositDTO, PaginatedTransactions, TransactionQueryParams, TransactionRecord, TransactionStatus, TransactionType, WalletBalanceSummary, WalletOperationResult } from "./wallet.types"
+import { CreditDepositBonusDTO, CreditFromDepositDTO, PaginatedTransactions, TransactionQueryParams, TransactionRecord, TransactionStatus, TransactionType, WalletBalanceSummary, WalletOperationResult } from "./wallet.types"
 import { ClientSession } from "mongoose";
 import User from "../user/users.model";
 import AppError from "../../utils/AppError";
@@ -103,6 +103,55 @@ export class WalletService {
                         }
                     }
                 ], 
+                { session }
+            );
+
+            return { transaction: toTransactionRecord(txn), currentBalance: balanceAfter };
+    };
+
+    async creditDepositBonus(userId: string, dto: CreditDepositBonusDTO, session: ClientSession):
+        Promise<WalletOperationResult> {
+            const walletTxnRef = `DEPOSIT:BONUS:${dto.depositId}`;
+
+            const existing = await Transaction.findOne({ referenceId: walletTxnRef }).session(session);
+            if (existing) {
+                return { transaction: toTransactionRecord(existing), currentBalance: existing.balanceAfter };
+            }
+
+            const updatedUser = await User.findOneAndUpdate(
+                { _id: new Types.ObjectId(userId), isActive: true },
+                { $inc: { walletBalance: dto.bonusAmount, nonWithdrawableBonusBalance: dto.bonusAmount } },
+                { new: true, session }
+            );
+
+            if (!updatedUser) {
+                const exists = await User.exists({ _id: userId }).session(session);
+                if (!exists) throw new AppError('User not found.', 404);
+                throw new AppError('Account is deactivated.', 403);
+            }
+
+            const balanceAfter = updatedUser.walletBalance;
+            const balanceBefore = balanceAfter - dto.bonusAmount;
+
+            const [txn] = await Transaction.create(
+                [
+                    {
+                        userId: updatedUser._id,
+                        type: TransactionType.DEPOSIT_BONUS,
+                        status: TransactionStatus.SUCCESS,
+                        amount: dto.bonusAmount,
+                        balanceBefore,
+                        balanceAfter,
+                        referenceId: walletTxnRef,
+                        metadata: {
+                            depositId: dto.depositId,
+                            refNumber: dto.refNumber,
+                            approvedBy: dto.approvedBy,
+                            bonusPercent: dto.bonusPercent,
+                            nonWithdrawable: true,
+                        }
+                    }
+                ],
                 { session }
             );
 

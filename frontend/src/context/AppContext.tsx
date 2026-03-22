@@ -58,7 +58,7 @@ export function AppProvider({ children }: AppProviderProps) {
         balance:  data?.balance  ?? 0,
         won:      data?.totalWon ?? 0,
         contests: data?.totalContests ?? 0,
-        bonus:    data?.bonus    ?? 0,
+        bonus:    data?.nonWithdrawableBonusBalance ?? data?.bonus ?? 0,
       });
     } catch {
       // fail silently — balance just stays at 0

@@ -23,6 +23,7 @@ export function AddMoneyModal({ show, onClose, onAdded, addToast }: Props) {
   const [step, setStep]             = useState<Step>("amount");
   const [amount, setAmount]         = useState("");
   const [refNumber, setRefNumber]   = useState("");
+  const [bonusCode, setBonusCode]   = useState("");
   const [depositId, setDepositId]   = useState<string | null>(null);
   const [depositStatus, setDepositStatus] = useState<DepositStatus>("PENDING");
   const [submitting, setSubmitting] = useState(false);
@@ -85,6 +86,7 @@ export function AddMoneyModal({ show, onClose, onAdded, addToast }: Props) {
     setStep("amount");
     setAmount("");
     setRefNumber("");
+    setBonusCode("");
     setDepositId(null);
     setDepositStatus("PENDING");
     setSubmitting(false);
@@ -113,6 +115,7 @@ export function AddMoneyModal({ show, onClose, onAdded, addToast }: Props) {
       const res = await api.post("/users/deposit", {
         amount: Number(amount),
         refNumber: refNumber.trim(),
+        bonusCode: bonusCode.trim() ? bonusCode.trim().toUpperCase() : undefined,
       });
 
       const deposit = res.data?.data?.deposit;
@@ -250,6 +253,21 @@ export function AddMoneyModal({ show, onClose, onAdded, addToast }: Props) {
               Find this in your UPI app under payment history after paying.
             </p>
           </div>
+          <div className="mt-3">
+            <label className="block text-xs font-bold text-[#3D3020] uppercase tracking-wide mb-1.5">
+              Bonus Code (Optional)
+            </label>
+            <input
+              className="w-full h-12 px-4 bg-[#F4F1EC] border-[1.5px] border-[#E8E0D4] rounded-xl text-sm font-bold text-[#1A1208] focus:border-[#EA4800] focus:bg-white outline-none transition-colors placeholder:font-normal placeholder:text-[#B0A090]"
+              type="text"
+              value={bonusCode}
+              onChange={(e) => setBonusCode(e.target.value.replace(/\s/g, "").toUpperCase())}
+              placeholder="Use code: KING11PRO50"
+            />
+            <p className="mt-1.5 text-xs text-[#7A6A55]">
+              Enter <span className="font-bold">KING11PRO50</span> to get 50% bonus on eligible deposit (₹50+).
+            </p>
+          </div>
           <p className="mt-4 text-xs text-green-600 font-semibold">🔒 Secure · Funds credited after admin approval</p>
         </div>
       )}
@@ -316,6 +334,12 @@ export function AddMoneyModal({ show, onClose, onAdded, addToast }: Props) {
               <span className="text-[#7A6A55]">Ref Number</span>
               <span className="font-bold text-[#1A1208] font-mono">{refNumber}</span>
             </div>
+            {bonusCode.trim() && (
+              <div className="flex justify-between text-sm">
+                <span className="text-[#7A6A55]">Bonus Code</span>
+                <span className="font-bold text-[#1A1208] font-mono">{bonusCode.trim().toUpperCase()}</span>
+              </div>
+            )}
             {depositId && (
               <div className="flex justify-between text-sm">
                 <span className="text-[#7A6A55]">Deposit ID</span>
