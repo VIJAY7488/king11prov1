@@ -46,7 +46,7 @@ const registereMongooseEvents = () : void => {
 
 export const connectDB = async(): Promise<void> => {
     const MONGODB_URI = process.env.MONGODB_URL;
-    const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'king11pro';
+    const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'king11';
 
     if (!MONGODB_URI) {
         console.log("Please define the MONGODB_URL environment variable");
