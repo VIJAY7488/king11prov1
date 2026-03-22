@@ -17,7 +17,6 @@ const createApp = ():Application => {
       [
         ...config.corsOrigins,
         'https://king11pro.live',
-        'https://www.king11pro.live',
       ].map(normalizeOrigin)
     );
 
