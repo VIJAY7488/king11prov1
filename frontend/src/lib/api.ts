@@ -1,8 +1,11 @@
 import axios from "axios";
 import type { AxiosRequestConfig, AxiosResponse } from "axios";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL?.trim() || "https://api.king11pro.live/api/v1";
+
 export const api = axios.create({
-  baseURL: "https://api.king11pro.live/api/v1",
+  baseURL: API_BASE_URL,
   withCredentials: true,
 });
 
