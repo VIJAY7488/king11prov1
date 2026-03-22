@@ -4,6 +4,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useApp } from "@/context/AppContext";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
+import { buildReferralLink } from "@/lib/referral";
 import { AddMoneyModal } from "@/components/wallet/AddMoneyModal";
 import { WithdrawMoneyModal } from "@/components/wallet/WithdrawMoneyModal";
 import { Button } from "@/components/ui/button";
@@ -79,18 +80,20 @@ export function ProfilePage() {
     });
   }
 
-  async function copyReferralCode() {
+  async function copyReferralLink() {
     const code = referralSummary?.referralCode || user?.referralCode;
     if (!code) {
-      toast({ type: "error", icon: "❌", msg: "Referral code not available yet" });
+      toast({ type: "error", icon: "❌", msg: "Referral link not available yet" });
       return;
     }
+    const link = buildReferralLink(code);
+    if (!link) return;
 
     try {
-      await navigator.clipboard.writeText(code);
-      toast({ type: "success", icon: "✅", msg: "Referral code copied" });
+      await navigator.clipboard.writeText(link);
+      toast({ type: "success", icon: "✅", msg: "Referral link copied" });
     } catch {
-      toast({ type: "error", icon: "❌", msg: "Failed to copy referral code" });
+      toast({ type: "error", icon: "❌", msg: "Failed to copy referral link" });
     }
   }
 
@@ -157,12 +160,12 @@ export function ProfilePage() {
 
         <div className="p-4">
           <div className="rounded-xl border border-[#E8E0D4] bg-[#FAFAF8] p-3 mb-3">
-            <div className="text-xs font-semibold uppercase tracking-wide text-[#7A6A55] mb-1">Your Referral Code</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-[#7A6A55] mb-1">Your Referral Link</div>
             <div className="flex items-center justify-between gap-3">
               <div className="font-display font-black text-xl tracking-wide text-[#1A1208]">
                 {referralSummary?.referralCode ?? user?.referralCode ?? "—"}
               </div>
-              <Button size="sm" onClick={copyReferralCode}>Copy</Button>
+              <Button size="sm" onClick={copyReferralLink}>Copy Link</Button>
             </div>
           </div>
 

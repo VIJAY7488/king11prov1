@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import { useApp } from "@/context/AppContext";
 import { getErrorMessage } from "@/lib/error";
@@ -50,6 +50,7 @@ function Field({ label, type = "text", placeholder, value, onChange, error, suff
 
 export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode; onAuth?: () => void }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const login    = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
   const token    = useAuthStore((s) => s.token);
@@ -63,6 +64,13 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode; on
 
   // If already logged in, go home
   useEffect(() => { if (token) navigate("/", { replace: true }); }, [token]);
+  useEffect(() => {
+    if (mode !== "signup") return;
+    const params = new URLSearchParams(location.search);
+    const raw = (params.get("ref") || params.get("referral") || "").trim().toUpperCase();
+    if (!raw || !/^[A-Z0-9]{6,20}$/.test(raw)) return;
+    setForm((prev) => ({ ...prev, referralCode: raw }));
+  }, [location.search, mode]);
 
   const updateField = (field: keyof FormState, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [field]: value }));

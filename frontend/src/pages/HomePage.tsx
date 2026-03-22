@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
 import { extractLiveUpcomingMatches } from "@/lib/matches";
+import { buildReferralLink } from "@/lib/referral";
 import { useApp } from "@/context/AppContext";
 import { useAuthStore } from "@/store/authStore";
 import type { MatchFromApi } from "@/types/api";
@@ -172,17 +173,28 @@ const Homepage = () => {
       navigate(`/teams?matchId=${c.matchId}&contestId=${c.id}`);
     }
 
-    async function copyReferralCode() {
+    async function shareReferralLink() {
       const code = referralSummary?.referralCode;
       if (!code) {
-        toast({ type: "error", icon: "❌", msg: "Referral code not available yet." });
+        toast({ type: "error", icon: "❌", msg: "Referral link not available yet." });
         return;
       }
+      const link = buildReferralLink(code);
+      if (!link) return;
       try {
-        await navigator.clipboard.writeText(code);
-        toast({ type: "success", icon: "✅", msg: `Copied ${code}` });
+        if (navigator.share) {
+          await navigator.share({
+            title: "Join King11Pro",
+            text: "Join using my referral link and start playing!",
+            url: link,
+          });
+          toast({ type: "success", icon: "✅", msg: "Referral link shared." });
+          return;
+        }
+        await navigator.clipboard.writeText(link);
+        toast({ type: "success", icon: "✅", msg: "Referral link copied." });
       } catch {
-        toast({ type: "error", icon: "❌", msg: "Failed to copy referral code." });
+        toast({ type: "error", icon: "❌", msg: "Failed to share referral link." });
       }
     }
 
@@ -253,7 +265,7 @@ const Homepage = () => {
                             <p className="font-display font-black text-3xl tracking-wider">{referralSummary?.referralCode ?? "KING------"}</p>
                             <p className="text-xs text-white/65 mt-2">Share this code. You earn after their first approved deposit.</p>
                             <div className="mt-4">
-                              <button onClick={copyReferralCode} className="px-4 py-2 rounded-lg bg-[#EA4800] text-white text-xs font-bold hover:bg-[#FF5A1A] transition-colors">Copy Code</button>
+                              <button onClick={shareReferralLink} className="px-4 py-2 rounded-lg bg-[#EA4800] text-white text-xs font-bold hover:bg-[#FF5A1A] transition-colors">Share Link</button>
                             </div>
                           </div>
                         )}
