@@ -139,6 +139,19 @@ export class ContestController {
     res.status(200).json({ status: 'success', data: result });
   });
 
+  /**
+   * GET /api/v1/admin/contests
+   * ───────────────────────────
+   * Admin-only contest listing — includes DRAFT and CANCELLED contests.
+   * Used by the admin dashboard to see and manage all contests.
+   * Query: { matchId?, status?, contestType?, page?, limit? }
+   */
+  adminListContests = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const result = await contestService.adminListContests(req.query as any);
+    res.status(200).json({ status: 'success', data: result });
+  });
+
+
   previewPrizeTable = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { prizePool, totalPlayers, winnerPercentage, rank } = req.body as {
       prizePool: number;

@@ -510,6 +510,50 @@ export class ContestService {
              totalPages: Math.ceil(total / limit) };
   }
 
+  // ── ADMIN: List All Contests (includes DRAFT + CANCELLED) ─────────────────
+  async adminListContests(params: ContestQueryParams): Promise<PaginatedContests> {
+    const page  = Math.max(1, params.page  ?? 1);
+    const limit = Math.min(200, Math.max(1, params.limit ?? 50));
+    const skip  = (page - 1) * limit;
+
+    // No status exclusion — admin sees everything
+    const filter: Record<string, unknown> = {};
+    if (params.matchId)     filter['matchId']     = params.matchId;
+    if (params.status)      filter['status']      = params.status;
+    if (params.contestType) filter['contestType'] = params.contestType;
+
+    const [contests, total] = await Promise.all([
+      Contest.find(filter)
+        .select(CONTEST_PUBLIC_PROJECTION)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Contest.countDocuments(filter),
+    ]);
+
+    const matchIds = [...new Set((contests as ContestDocLike[]).map((c) => c.matchId))];
+    const validMatchIds = matchIds.filter((id) => Types.ObjectId.isValid(id));
+
+    const { Match } = await import('../match/match.model');
+    const matches = await Match.find({ _id: { $in: validMatchIds } })
+      .select(MATCH_LISTING_PROJECTION)
+      .lean();
+    const matchMap = new Map(matches.map((m: any) => [m._id.toString(), m]));
+
+    const populatedContests = (contests as ContestDocLike[]).map((c: any) => {
+      const matchDoc = matchMap.get(c.matchId);
+      if (matchDoc) {
+        c.match = { ...matchDoc, id: matchDoc._id.toString() };
+      }
+      return c;
+    });
+
+    return { contests: populatedContests.map((c) => toContestPublic(c as ContestDocLike)), total, page, limit,
+             totalPages: Math.ceil(total / limit) };
+  }
+
+
   async getContestById(contestId: string): Promise<ContestPublic> {
     const contest = await Contest.findById(contestId).select(CONTEST_PUBLIC_PROJECTION).lean();
     if (!contest) throw new AppError('Contest not found.', 404);

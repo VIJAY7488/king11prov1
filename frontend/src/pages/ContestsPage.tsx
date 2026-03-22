@@ -18,6 +18,7 @@ export function ContestsPage() {
   
   const [contests, setContests] = useState<Contest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,6 +70,8 @@ export function ContestsPage() {
     // If they came from the "My Teams" page by clicking "Join Contest", 
     // we already have their team context, so join immediately!
     if (urlTeamId) {
+        if (joining) return; // prevent double-submit
+        setJoining(true);
         try {
             const res = await api.post("/users/join-contest", { contestId: c.id, teamId: urlTeamId });
             trackEvent("join_contest", {
@@ -81,9 +84,11 @@ export function ContestsPage() {
               setWalletBalance(res.data.data.newBalance);
             }
             refreshWallet();
-            setTimeout(() => navigate("/teams"), 2000); // go back to my teams after success
+            setTimeout(() => navigate("/joined-contests"), 2000);
         } catch (err) {
             toast({ type: "error", icon: "❌", msg: getErrorMessage(err, "Error joining contest") });
+        } finally {
+            setJoining(false);
         }
         return;
     }

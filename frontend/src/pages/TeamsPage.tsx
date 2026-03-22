@@ -49,7 +49,7 @@ export function TeamsPage() {
       const ids = new Set<string>();
       for (const item of joinedItems) {
         const contestStatus = (item?.contest?.status ?? "").toUpperCase();
-        const isActiveContest = contestStatus === "OPEN" || contestStatus === "FULL" || contestStatus === "CLOSED" || contestStatus === "DRAFT";
+        const isActiveContest = contestStatus === "OPEN" || contestStatus === "FULL" || contestStatus === "CLOSED";
         if (!isActiveContest) continue;
         const id = item?.team?.id ?? item?.team?._id;
         if (id) ids.add(id);
@@ -107,7 +107,7 @@ export function TeamsPage() {
         setWalletBalance(res.data.data.newBalance);
       }
       refreshWallet();
-      setTimeout(() => navigate("/teams"), 2000); // go back to my teams after success
+      setTimeout(() => navigate("/joined-contests"), 2000); // go to joined contests after success
     } catch (err) {
       toast({ type: "error", icon: "❌", msg: getErrorMessage(err, "Error joining contest") });
     } finally {

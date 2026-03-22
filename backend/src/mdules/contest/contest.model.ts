@@ -207,7 +207,7 @@ contestSchema.pre('save', async function (this: IContest) {
         this.totalSpots      = totalSpots;
     }
 
-    if (this.totalSpots < 2) {
+    if (this.contestType !== ContestType.FREE_LEAGUE && this.totalSpots < 2) {
         throw new Error(
           `totalSpots (${this.totalSpots}) must be at least 2. ` +
           `Increase prizePool or decrease entryFee.`

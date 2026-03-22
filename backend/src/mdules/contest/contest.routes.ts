@@ -5,24 +5,34 @@ import { createContestSchema, prizeTablePreviewSchema, updateContestSchema } fro
 import contestController from "./contest.controller";
 import requireAdmin from "../../middlewares/requireAdmin.middleware";
 
+// ── Public + Admin router — mounted at '/' in routes/index.ts ─────────────────
+// Handles: GET /contests, GET /contests/:id/prize-table,
+//          POST /contests/prize-table/preview, POST /contest (admin), PATCH /update-contest/:id (admin)
+const publicContestRouter = Router();
+
+// Public routes (no auth)
+publicContestRouter.get('/contests', contestController.listContests);
+publicContestRouter.get('/contests/:id/prize-table', contestController.getContestPrizeTable);
+publicContestRouter.post('/contests/prize-table/preview', validate(prizeTablePreviewSchema), contestController.previewPrizeTable);
+
+// Admin routes (auth required)
+publicContestRouter.get('/admin/contests', authenticate, requireAdmin, contestController.adminListContests);
+publicContestRouter.post('/contest', authenticate, validate(createContestSchema), requireAdmin, contestController.adminCreateContest);
+publicContestRouter.patch('/update-contest/:id', authenticate, validate(updateContestSchema), requireAdmin, contestController.adminUpdateContest);
+
+export { publicContestRouter };
 
 
-const router = Router();
+// ── User router — mounted at '/users' in routes/index.ts ──────────────────────
+// Handles: POST /users/join-contest, GET /users/joined-contests
+const userContestRouter = Router();
 
-// Public routes
-router.get('/contests', contestController.listContests);
-router.get('/contests/:id/prize-table', contestController.getContestPrizeTable);
-router.post('/contests/prize-table/preview', validate(prizeTablePreviewSchema), contestController.previewPrizeTable);
+userContestRouter.use(authenticate);
+userContestRouter.post('/join-contest', contestController.joinContest);
+userContestRouter.get('/joined-contests', contestController.getMyJoinedContests);
 
-// All contest routes require authentication
-router.use(authenticate);
+export { userContestRouter };
 
+// Default export kept for backward compatibility (not used after routes/index.ts update)
+export default publicContestRouter;
 
-router.post('/contest', validate(createContestSchema), requireAdmin, contestController.adminCreateContest);
-router.patch('/update-contest/:id', validate(updateContestSchema), requireAdmin, contestController.adminUpdateContest);
-
-// User: join a contest with an existing team
-router.post('/join-contest', contestController.joinContest);
-router.get('/joined-contests', contestController.getMyJoinedContests);
-
-export default router;

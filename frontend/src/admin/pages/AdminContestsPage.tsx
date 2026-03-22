@@ -43,7 +43,7 @@ export default function AdminContestsPage() {
   async function load() {
     setLoading(true);
     try {
-      const res = await api.get("/contests?limit=100");
+      const res = await api.get("/admin/contests?limit=100");
       setContests(res.data?.data?.contests ?? []);
     } catch { setError("Failed to load contests"); }
     finally { setLoading(false); }

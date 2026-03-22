@@ -207,7 +207,7 @@ export class DepositService {
 
       return {
         deposit: toDepositPublic(updatedDeposit),
-        walletBalance: walletResult.currentBalance + bonusCredited,
+        walletBalance: walletResult.currentBalance + bonusCredited, // deposit balance + bonus
         walletTransactionId: walletTxnRef,
         bonusCredited,
         walletBonusTransactionId,

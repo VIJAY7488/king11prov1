@@ -714,7 +714,7 @@ export class ScoreService {
         entries.map((e) => ({
           updateOne: {
             filter: { _id: e._id },
-            update: { $set: { finalPoints: e.livePoints, finalRank: e.liveRank, rank: e.liveRank } },
+            update: { $set: { finalPoints: e.livePoints, finalRank: e.liveRank } },
           },
         }))
       );

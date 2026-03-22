@@ -112,7 +112,7 @@ export function JoinedContestsPage() {
       ) : (
         <div className="space-y-4">
           {sorted.map((item) => {
-            const isEditable = item.match?.status === "UPCOMING";
+            const isEditable = item.match?.status === "UPCOMING" && !!item.match;
             return (
               <div key={item.entryId} className="bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl overflow-hidden shadow-sm" style={{ borderTopWidth: 3, borderTopColor: "#EA4800" }}>
                 <div className="bg-[#F4F1EC] border-b-[1.5px] border-[#E8E0D4] px-5 py-3.5 flex items-center justify-between">
@@ -128,7 +128,11 @@ export function JoinedContestsPage() {
                       size="sm"
                       variant={isEditable ? "default" : "outline"}
                       disabled={!isEditable}
-                      onClick={() => { setEditing(item); setShowEdit(true); }}
+                      onClick={() => {
+                        if (!item.match) return;
+                        setEditing(item);
+                        setShowEdit(true);
+                      }}
                     >
                       {isEditable ? "Edit Team" : "Locked"}
                     </Button>
@@ -187,7 +191,7 @@ export function JoinedContestsPage() {
         <CreateTeamModal
           show={showEdit}
           onClose={() => { setShowEdit(false); setEditing(null); }}
-          match={editing.match ?? null}
+          match={editing?.match ?? null}
           mode="edit"
           initialTeam={editing.team}
           onSaved={() => {
