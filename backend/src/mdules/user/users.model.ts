@@ -90,7 +90,6 @@ const userSchema = new Schema<IUser>({
         unique: true,
         trim: true,
         uppercase: true,
-        immutable: true,
         minlength: [6, 'Referral code must be at least 6 characters'],
         maxlength: [20, 'Referral code cannot exceed 20 characters'],
     },
