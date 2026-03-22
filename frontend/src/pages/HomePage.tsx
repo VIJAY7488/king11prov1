@@ -27,6 +27,7 @@ const Homepage = () => {
     const [error, setError]       = useState<string | null>(null);
     const [showPointTable, setShowPointTable] = useState(false);
     const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
+    const [referralSlide, setReferralSlide] = useState(0);
 
     const { toast } = useApp();
     const token = useAuthStore((s) => s.token);
@@ -105,6 +106,13 @@ const Homepage = () => {
     }
 
     useEffect(() => { loadData(); }, [token]);
+    useEffect(() => {
+      if (!token) return;
+      const id = setInterval(() => {
+        setReferralSlide((prev) => (prev + 1) % 2);
+      }, 4200);
+      return () => clearInterval(id);
+    }, [token]);
     // Helper functions
     const matchId = (m: MatchFromApi) => m.id ?? m._id ?? "";
     const matchDateObj = (m: MatchFromApi ) => {
@@ -259,41 +267,65 @@ const Homepage = () => {
                       </div>
 
                       <div className="relative p-4 sm:p-5">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 items-stretch">
-                          <div>
-                            <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">Share Referral Link</p>
-                            <p className="font-display font-black text-3xl tracking-wider">{referralSummary?.referralCode ?? "KING------"}</p>
-                            <p className="text-xs text-white/65 mt-2">Invite friends and earn ₹{(referralSummary?.rewardPerReferral ?? 50).toLocaleString("en-IN")} when they complete first deposit.</p>
-                            <a
-                              href={buildReferralLink(referralSummary?.referralCode ?? "") || "#"}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="mt-2 inline-block text-[11px] text-[#FFD7BC] underline break-all"
-                              onClick={(e) => {
-                                if (!referralSummary?.referralCode) e.preventDefault();
-                              }}
-                            >
-                              {buildReferralLink(referralSummary?.referralCode ?? "")}
-                            </a>
-                            <div className="mt-4">
-                              <button onClick={shareReferralLink} className="px-4 py-2 rounded-lg bg-[#EA4800] text-white text-xs font-bold hover:bg-[#FF5A1A] transition-colors">Share Link</button>
+                        {referralSlide === 0 && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 items-stretch">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">Share Referral Link</p>
+                              <p className="font-display font-black text-3xl tracking-wider">{referralSummary?.referralCode ?? "KING------"}</p>
+                              <p className="text-xs text-white/65 mt-2">Invite friends and earn ₹{(referralSummary?.rewardPerReferral ?? 50).toLocaleString("en-IN")} when they complete first deposit.</p>
+                              <a
+                                href={buildReferralLink(referralSummary?.referralCode ?? "") || "#"}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-2 inline-block text-[11px] text-[#FFD7BC] underline break-all"
+                                onClick={(e) => {
+                                  if (!referralSummary?.referralCode) e.preventDefault();
+                                }}
+                              >
+                                {buildReferralLink(referralSummary?.referralCode ?? "")}
+                              </a>
+                              <div className="mt-4">
+                                <button onClick={shareReferralLink} className="px-4 py-2 rounded-lg bg-[#EA4800] text-white text-xs font-bold hover:bg-[#FF5A1A] transition-colors">Share Link</button>
+                              </div>
+                            </div>
+
+                            <div className="rounded-lg border border-white/20 bg-white/10 p-3">
+                              <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">How It Works</p>
+                              <div className="space-y-1.5 text-sm">
+                                <p>1. Share your referral link</p>
+                                <p>2. Friend signs up and deposits first time</p>
+                                <p>3. You get ₹{(referralSummary?.rewardPerReferral ?? 50).toLocaleString("en-IN")} referral bonus</p>
+                              </div>
+                              <p className="text-[11px] text-white/65 mt-2">Bonus is non-withdrawable, usable in contests.</p>
                             </div>
                           </div>
+                        )}
 
-                          <div className="rounded-lg border border-white/20 bg-white/10 p-3">
-                            <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">Deposit Bonus Code</p>
-                            <div className="rounded-lg border border-[#FFB88F66] bg-[#EA480033] px-3 py-2 flex items-center justify-between gap-3">
-                              <span className="font-display font-black tracking-wider text-lg">KING11PRO50</span>
-                              <button onClick={copyBonusCode} className="px-2.5 py-1 rounded-md bg-white/20 text-white text-[11px] font-bold hover:bg-white/30 transition-colors">
-                                Copy
+                        {referralSlide === 1 && (
+                          <div className="max-w-[620px]">
+                            <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">Deposit Bonus Offer</p>
+                            <div className="rounded-lg border border-[#FFB88F66] bg-[#EA480033] px-3 py-3 flex items-center justify-between gap-3">
+                              <span className="font-display font-black tracking-wider text-xl">KING11PRO50</span>
+                              <button onClick={copyBonusCode} className="px-3 py-1.5 rounded-md bg-white/20 text-white text-[11px] font-bold hover:bg-white/30 transition-colors">
+                                Copy Code
                               </button>
                             </div>
-                            <p className="text-[12px] text-white/80 mt-2">Use this while adding money.</p>
-                            <p className="text-[12px] text-white/80">Get 50% bonus on ₹50+ deposit.</p>
-                            <p className="text-[11px] text-white/65 mt-2">Bonus is non-withdrawable, but usable in contests.</p>
+                            <p className="text-sm text-white/85 mt-3">Use this while adding money to unlock <span className="font-black">50% bonus</span> on ₹50+ deposits.</p>
+                            <p className="text-[12px] text-white/65 mt-1">Bonus is non-withdrawable. Deposit + winnings are withdrawable.</p>
                           </div>
-                        </div>
+                        )}
                       </div>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2 mt-3">
+                      {[0, 1].map((idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setReferralSlide(idx)}
+                          className={`h-2 rounded-full transition-all ${referralSlide === idx ? "w-6 bg-[#EA4800]" : "w-2 bg-[#D8CFC4]"}`}
+                          aria-label={`Referral slide ${idx + 1}`}
+                        />
+                      ))}
                     </div>
                   </div>
                 </div>
