@@ -40,7 +40,7 @@ const createApp = ():Application => {
     app.use(
         cors(corsDelegate)
     );
-    app.options('*', cors(corsDelegate));
+    app.use(cors(corsDelegate));
 
 
 
