@@ -11,12 +11,22 @@ import { Modal } from "@/components/ui/modal";
 import HeroBanner from "@/components/home/HeroBanner";
 
 const Homepage = () => {
+    type ReferralSummary = {
+      referralCode: string;
+      totalReferrals: number;
+      rewardedReferrals: number;
+      pendingReferrals: number;
+      totalBonusEarned: number;
+      rewardPerReferral: number;
+    };
 
     const [matches, setMatches] = useState<MatchFromApi[]>([]);
     const [contests, setContests] = useState<Contest[]>([]);
     const [loading, setLoading]   = useState(true);
     const [error, setError]       = useState<string | null>(null);
     const [showPointTable, setShowPointTable] = useState(false);
+    const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
+    const [referralSlide, setReferralSlide] = useState(0);
 
     const { toast } = useApp();
     const token = useAuthStore((s) => s.token);
@@ -39,12 +49,14 @@ const Homepage = () => {
                 .slice(0, 6);
               setContests(openContests);
               setMatches(extractLiveUpcomingMatches(allContests).slice(0, 6));
+              setReferralSummary(null);
               hasData = true;
             } else {
               const [matchRes, contestRes] = await Promise.allSettled([
                 api.get("/matches?limit=10"),
                 api.get("/contests?limit=12"),
               ]);
+              const referralRes = await api.get("/users/me/referral").catch(() => null);
 
               let allContests: Contest[] = [];
 
@@ -76,6 +88,8 @@ const Homepage = () => {
                 setMatches(extractLiveUpcomingMatches(allContests).slice(0, 6));
                 hasData = true;
               }
+
+              setReferralSummary(referralRes?.data?.data?.summary ?? null);
             }
 
             if (!hasData) {
@@ -91,6 +105,13 @@ const Homepage = () => {
     }
 
     useEffect(() => { loadData(); }, [token]);
+    useEffect(() => {
+      if (!token) return;
+      const id = setInterval(() => {
+        setReferralSlide((prev) => (prev + 1) % 3);
+      }, 3800);
+      return () => clearInterval(id);
+    }, [token]);
 
     // Helper functions
     const matchId = (m: MatchFromApi) => m.id ?? m._id ?? "";
@@ -151,6 +172,20 @@ const Homepage = () => {
       navigate(`/teams?matchId=${c.matchId}&contestId=${c.id}`);
     }
 
+    async function copyReferralCode() {
+      const code = referralSummary?.referralCode;
+      if (!code) {
+        toast({ type: "error", icon: "❌", msg: "Referral code not available yet." });
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(code);
+        toast({ type: "success", icon: "✅", msg: `Copied ${code}` });
+      } catch {
+        toast({ type: "error", icon: "❌", msg: "Failed to copy referral code." });
+      }
+    }
+
     if (loading) {
         return (
             <div className="max-w-[1280px] mx-auto px-4 sm:px-6 pt-6">
@@ -195,6 +230,83 @@ const Homepage = () => {
                   onPointSystemClick={() => setShowPointTable(true)}
                 />
             </section>
+
+            {token && (
+              <section className="mb-8">
+                <div className="rounded-2xl overflow-hidden border-[1.5px] border-[#E8E0D4] shadow-sm bg-white" style={{ borderTopWidth: 3, borderTopColor: "#EA4800" }}>
+                  <div className="bg-[#F4F1EC] px-4 sm:px-5 py-3 border-b border-[#E8E0D4] flex items-center justify-between gap-3">
+                    <h3 className="font-display font-bold text-sm sm:text-base">🎁 Refer Friends & Earn</h3>
+                    <button onClick={() => navigate("/profile")} className="text-xs font-bold text-[#EA4800] hover:text-[#FF5A1A]">View Referrals →</button>
+                  </div>
+
+                  <div className="p-4 sm:p-5">
+                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#1A1208] via-[#2A1A0E] to-[#3D2413] text-white min-h-[170px]">
+                      <div className="absolute inset-0 pointer-events-none">
+                        <div className="absolute -top-10 -right-6 w-40 h-40 rounded-full bg-[#EA480066] blur-2xl" />
+                        <div className="absolute -bottom-8 -left-8 w-40 h-40 rounded-full bg-[#FFB36644] blur-2xl" />
+                      </div>
+
+                      <div className="relative p-4 sm:p-5">
+                        {referralSlide === 0 && (
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">Your Invite Code</p>
+                            <p className="font-display font-black text-3xl tracking-wider">{referralSummary?.referralCode ?? "KING------"}</p>
+                            <p className="text-xs text-white/65 mt-2">Share this code. You earn after their first approved deposit.</p>
+                            <div className="mt-4">
+                              <button onClick={copyReferralCode} className="px-4 py-2 rounded-lg bg-[#EA4800] text-white text-xs font-bold hover:bg-[#FF5A1A] transition-colors">Copy Code</button>
+                            </div>
+                          </div>
+                        )}
+
+                        {referralSlide === 1 && (
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">Rewards Snapshot</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="rounded-lg bg-white/10 border border-white/15 p-2">
+                                <p className="text-[10px] text-white/65 uppercase">Total</p>
+                                <p className="font-black text-lg">{referralSummary?.totalReferrals ?? 0}</p>
+                              </div>
+                              <div className="rounded-lg bg-white/10 border border-white/15 p-2">
+                                <p className="text-[10px] text-white/65 uppercase">Rewarded</p>
+                                <p className="font-black text-lg">{referralSummary?.rewardedReferrals ?? 0}</p>
+                              </div>
+                              <div className="rounded-lg bg-white/10 border border-white/15 p-2">
+                                <p className="text-[10px] text-white/65 uppercase">Bonus</p>
+                                <p className="font-black text-lg">₹{(referralSummary?.totalBonusEarned ?? 0).toLocaleString("en-IN")}</p>
+                              </div>
+                            </div>
+                            <p className="text-xs text-white/65 mt-3">₹{(referralSummary?.rewardPerReferral ?? 50).toLocaleString("en-IN")} per successful referral.</p>
+                          </div>
+                        )}
+
+                        {referralSlide === 2 && (
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-wider text-[#FFB88F] mb-2">How It Works</p>
+                            <div className="space-y-1.5 text-sm">
+                              <p>1. Friend signs up with your code</p>
+                              <p>2. Friend makes first approved deposit</p>
+                              <p>3. You get ₹{(referralSummary?.rewardPerReferral ?? 50).toLocaleString("en-IN")} bonus instantly</p>
+                            </div>
+                            <p className="text-[11px] text-white/65 mt-3">Bonus is non-withdrawable, but you can use it to join contests.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2 mt-3">
+                      {[0, 1, 2].map((idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setReferralSlide(idx)}
+                          className={`h-2 rounded-full transition-all ${referralSlide === idx ? "w-6 bg-[#EA4800]" : "w-2 bg-[#D8CFC4]"}`}
+                          aria-label={`Referral slide ${idx + 1}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
 
             {/* ── Matches ── */}
             <section className="mb-8">
