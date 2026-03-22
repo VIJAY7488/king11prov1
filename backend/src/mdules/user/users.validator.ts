@@ -17,7 +17,7 @@ export const registerSchema = Joi.object({
     name: Joi.string().min(3).max(30).required(),
     mobileNumber,
     password,
-    referralCode: Joi.string().trim().uppercase().alphanum().min(6).max(20).optional(),
+    referralCode: Joi.string().trim().uppercase().alphanum().min(6).max(20).empty('').optional(),
 });
 
 export const loginSchema = Joi.object({

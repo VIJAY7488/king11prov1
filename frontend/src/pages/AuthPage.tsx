@@ -12,6 +12,7 @@ interface FormState {
   mobileNumber: string;
   password: string;
   confirmPassword: string;
+  referralCode: string;
   agree: boolean;
 }
 
@@ -57,7 +58,7 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode; on
   const [mode, setMode]         = useState<AuthMode>(initialMode);
   const [loading, setLoading]   = useState(false);
   const [showPass, setShowPass] = useState(false);
-  const [form, setForm]         = useState<FormState>({ name: "", mobileNumber: "", password: "", confirmPassword: "", agree: false });
+  const [form, setForm]         = useState<FormState>({ name: "", mobileNumber: "", password: "", confirmPassword: "", referralCode: "", agree: false });
   const [errors, setErrors]     = useState<Partial<Record<keyof FormState, string>>>({});
 
   // If already logged in, go home
@@ -71,6 +72,9 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode; on
     if (mode === "signup") {
       if (!form.name.trim())             errs.name = "Name is required";
       if (form.password !== form.confirmPassword) errs.confirmPassword = "Passwords do not match";
+      if (form.referralCode.trim() && !/^[a-zA-Z0-9]{6,20}$/.test(form.referralCode.trim())) {
+        errs.referralCode = "Referral code must be 6-20 letters/numbers";
+      }
     }
     if (!form.mobileNumber.trim() || !/^\d{10}$/.test(form.mobileNumber))
       errs.mobileNumber = "10-digit mobile required";
@@ -87,7 +91,12 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode; on
         await login(form.mobileNumber, form.password);
         trackEvent("login", { method: "mobile_password" });
       } else {
-        await register({ name: form.name, mobileNumber: form.mobileNumber, password: form.password });
+        await register({
+          name: form.name,
+          mobileNumber: form.mobileNumber,
+          password: form.password,
+          referralCode: form.referralCode.trim() ? form.referralCode.trim().toUpperCase() : undefined,
+        });
         trackEvent("sign_up", { method: "mobile_password" });
       }
       navigate("/", { replace: true });
@@ -102,7 +111,7 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode; on
   function switchMode(m: AuthMode) {
     setMode(m);
     setErrors({});
-    setForm({ name: "", mobileNumber: "", password: "", confirmPassword: "", agree: false });
+    setForm({ name: "", mobileNumber: "", password: "", confirmPassword: "", referralCode: "", agree: false });
   }
 
   return (
@@ -141,6 +150,15 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode; on
               suffix={<span onClick={() => setShowPass(!showPass)}>{showPass ? "🙈" : "👁️"}</span>} />
 
             {mode === "signup" && <Field label="Confirm Password" type="password" value={form.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} error={errors.confirmPassword} />}
+            {mode === "signup" && (
+              <Field
+                label="Referral Code (Optional)"
+                value={form.referralCode}
+                placeholder="Enter referral code"
+                onChange={(v) => updateField("referralCode", v.replace(/[^a-zA-Z0-9]/g, "").slice(0, 20).toUpperCase())}
+                error={errors.referralCode}
+              />
+            )}
 
             <button onClick={handleSubmit} disabled={loading}
               style={{ width: "100%", height: 48, borderRadius: 12, border: "none", background: loading ? "#FFDDCC" : "linear-gradient(135deg,#EA4800,#FF5A1A)", color: "#fff", fontWeight: 800, cursor: loading ? "not-allowed" : "pointer" }}>
