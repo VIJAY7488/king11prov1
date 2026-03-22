@@ -18,10 +18,14 @@ export class WalletController {
   // ── Balance & Summary ──────────────────────────────────────────────────────
 
   getBalance = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const balance = await walletService.getBalance(req.user!.id);
+    const summary = await walletService.getBalance(req.user!.id);
     res.status(200).json({
       status: 'success',
-      data: { balance },
+      data: {
+        balance: summary.totalBalance,
+        withdrawableBalance: summary.withdrawableBalance,
+        nonWithdrawableBonusBalance: summary.nonWithdrawableBonusBalance,
+      },
     });
   });
 

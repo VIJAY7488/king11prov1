@@ -5,6 +5,7 @@ export interface RegisterDTO {
     name: string;
     mobileNumber: string;
     password: string;
+    referralCode?: string;
 };
 
 export interface LoginDTO {
@@ -29,9 +30,20 @@ export interface UserPublicProfile {
   mobileNumber: string;
   role: UserRole;
   walletBalance: number;
+  withdrawableBalance: number;
+  nonWithdrawableBonusBalance: number;
+  referralCode: string;
   isActive: boolean;
   createdAt: Date;
 };
+
+export interface ReferralSummary {
+  referralCode: string;
+  totalReferrals: number;
+  rewardedReferrals: number;
+  pendingReferrals: number;
+  totalBonusEarned: number;
+}
 
 export interface AuthTokens {
   accessToken: string;

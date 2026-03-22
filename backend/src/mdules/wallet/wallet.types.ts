@@ -6,6 +6,7 @@ import { Types } from 'mongoose';
 
 export enum TransactionType {
     DEPOSIT      = 'DEPOSIT',      // credited via approved Deposit request
+    REFERRAL_BONUS = 'REFERRAL_BONUS', // non-withdrawable bonus credited to referrer
     DEDUCTION    = 'DEDUCTION',    // manual admin deduction
     REFUND       = 'REFUND',       // contest entry refund
     JOIN_CONTEST = 'JOIN_CONTEST', // contest entry fee
@@ -71,6 +72,12 @@ export interface WalletSummary {
 export interface WalletOperationResult {
   transaction: TransactionRecord;
   currentBalance: number;
+}
+
+export interface WalletBalanceSummary {
+  totalBalance: number;
+  withdrawableBalance: number;
+  nonWithdrawableBonusBalance: number;
 }
 
 export interface PaginatedTransactions {

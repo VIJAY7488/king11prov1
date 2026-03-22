@@ -400,16 +400,17 @@ export class ContestService {
         }
 
         const entries = await ContestEntry.find({ contestId: new Types.ObjectId(contestId) })
-          .select('_id userId entryFee')
+          .select('_id userId teamId entryFee')
           .session(session)
           .lean();
 
-        for (const entry of entries as Array<{ _id: Types.ObjectId; userId: Types.ObjectId; entryFee: number }>) {
+        for (const entry of entries as Array<{ _id: Types.ObjectId; userId: Types.ObjectId; teamId: Types.ObjectId; entryFee: number }>) {
           if (!Number.isFinite(entry.entryFee) || entry.entryFee <= 0) continue;
           await walletService.creditContestCancellationRefund(
             entry.userId.toString(),
             contestId,
             entry._id.toString(),
+            entry.teamId.toString(),
             entry.entryFee,
             session
           );

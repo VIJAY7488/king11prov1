@@ -4,6 +4,7 @@ import { ApproveDepositResult, CreateDepositDTO, DepositPublic, DepositQueryPara
 import AppError from '../../utils/AppError';
 import User from '../user/users.model';
 import walletService from '../wallet/wallet.service';
+import referralService from '../referral/referral.service';
 
 
 
@@ -169,6 +170,12 @@ export class DepositService {
           approvedBy: adminId,
         },
         session  // ← passes the live session in — single atomic boundary
+      );
+
+      await referralService.rewardReferrerOnFirstApprovedDeposit(
+        deposit.userId.toString(),
+        depositId,
+        session
       );
 
       return {

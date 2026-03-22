@@ -7,6 +7,7 @@ import teamRouter    from '../mdules/team/team.routes';
 import matchRouter   from '../mdules/match/match.routes';
 import scoreRouter   from '../mdules/scores/score.routes';
 import withdrawalRouter from '../mdules/withdrawal/withdrawal.routes';
+import referralRouter from '../mdules/referral/referral.routes';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.use('/users', userRouter);
 router.use('/users', depositRouter);
 router.use('/users/wallet', walletRouter);
 router.use('/users', withdrawalRouter);
+router.use('/users', referralRouter);
 
 // ── Contests ─────────────────────────────────────────────────────────────────
 router.use('/', contestRouter);   // GET /contests (public) + admin CRUD under /admin/

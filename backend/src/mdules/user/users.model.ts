@@ -18,6 +18,9 @@ export interface IUser extends Document {
     mobileNumber: string;
     password: string;
     walletBalance: number;
+    withdrawableBalance: number;
+    nonWithdrawableBonusBalance: number;
+    referralCode: string;
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -69,6 +72,29 @@ const userSchema = new Schema<IUser>({
         min: [0, 'Wallet balance cannot be negative'],
     },
 
+    withdrawableBalance: {
+        type: Number,
+        default: 0,
+        min: [0, 'Withdrawable balance cannot be negative'],
+    },
+
+    nonWithdrawableBonusBalance: {
+        type: Number,
+        default: 0,
+        min: [0, 'Bonus balance cannot be negative'],
+    },
+
+    referralCode: {
+        type: String,
+        required: [true, 'Referral code is required'],
+        unique: true,
+        trim: true,
+        uppercase: true,
+        default: () => `USR${Math.floor(100000 + Math.random() * 900000)}`,
+        minlength: [6, 'Referral code must be at least 6 characters'],
+        maxlength: [20, 'Referral code cannot exceed 20 characters'],
+    },
+
     isActive: {
         type: Boolean,
         default: true,
@@ -89,6 +115,7 @@ const userSchema = new Schema<IUser>({
 
 // ── Indexes ──────────────────────────────────────────────────────────────────
 userSchema.index({ createdAt: -1 });
+userSchema.index({ referralCode: 1 }, { unique: true });
 
 
 // ── Pre-save Hook: hash password ─────────────────────────────────────────────

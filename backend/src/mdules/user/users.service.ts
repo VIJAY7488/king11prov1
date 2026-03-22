@@ -3,6 +3,7 @@ import AppError from "../../utils/AppError";
 import User, { IUser, UserRole } from "./users.model";
 import { AuthResponse, AuthTokens, ChangePasswordDTO, JwtPayload, LoginDTO, RegisterDTO, UpdateProfileDTO, UserPublicProfile } from "./users.types";
 import config from '../../config/env';
+import referralService from '../referral/referral.service';
 
 
 
@@ -33,13 +34,33 @@ const toPublicProfile = (user: IUser): UserPublicProfile => ({
     mobileNumber: user.mobileNumber,
     role: user.role,
     walletBalance: user.walletBalance,
+    withdrawableBalance: user.withdrawableBalance,
+    nonWithdrawableBonusBalance: user.nonWithdrawableBonusBalance,
+    referralCode: user.referralCode,
     isActive: user.isActive,
     createdAt: user.createdAt,
 })
 
+const buildCandidateReferralCode = (name: string): string => {
+    const cleanName = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const prefix = (cleanName || 'KING').slice(0, 6);
+    const suffix = Math.floor(1000 + Math.random() * 9000).toString();
+    return `${prefix}${suffix}`;
+};
+
 
 // ── Service ───────────────────────────────────────────────────────────────────
 export class UserService {
+    private async generateUniqueReferralCode(name: string): Promise<string> {
+        for (let i = 0; i < 20; i += 1) {
+            const code = buildCandidateReferralCode(name);
+            const existing = await User.exists({ referralCode: code });
+            if (!existing) return code;
+        }
+
+        throw new AppError('Unable to generate referral code. Please try again.', 500);
+    }
+
     // ── Auth ──────────────────────────────────────────────────────────────────
     async register(dto: RegisterDTO): Promise<AuthResponse> {
         const existing = await User.findOne({mobileNumber: dto.mobileNumber});
@@ -48,12 +69,33 @@ export class UserService {
             throw new AppError('An account with this mobile number already exists.', 409)
         };
 
+        const normalizedReferralCode = dto.referralCode?.trim().toUpperCase();
+        let referrerId: string | null = null;
+
+        if (normalizedReferralCode) {
+            const referrer = await User.findOne({ referralCode: normalizedReferralCode });
+            if (!referrer) {
+                throw new AppError('Invalid referral code.', 400);
+            }
+            if (!referrer.isActive) {
+                throw new AppError('Referral code belongs to an inactive account.', 400);
+            }
+            referrerId = referrer._id.toString();
+        }
+
+        const referralCode = await this.generateUniqueReferralCode(dto.name);
+
         const user = await User.create({
             name: dto.name,
             mobileNumber: dto.mobileNumber,
             password: dto.password, // hashed via pre-save hook
-            role: UserRole.USER
+            role: UserRole.USER,
+            referralCode,
         });
+
+        if (referrerId && referrerId !== user._id.toString()) {
+            await referralService.createPendingReferral(referrerId, user._id.toString(), normalizedReferralCode!);
+        }
 
         const tokens = signTokens(user);
         return { user: toPublicProfile(user), tokens };

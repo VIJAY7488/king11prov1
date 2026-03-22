@@ -62,16 +62,21 @@ export class WithdrawalService {
       if (!user) throw new AppError('User not found.', 404);
       if (!user.isActive) throw new AppError('Account is deactivated.', 403);
 
-      if (user.walletBalance < dto.amount) {
-        throw new AppError('Insufficient wallet balance for withdrawal.', 402);
+      if (user.withdrawableBalance < dto.amount) {
+        throw new AppError('Insufficient withdrawable balance for withdrawal.', 402);
       }
 
       const withdrawalId = new Types.ObjectId();
       const walletTxnRef = `WITHDRAWAL:REQUEST:${withdrawalId.toString()}`;
 
       const updatedUser = await User.findOneAndUpdate(
-        { _id: new Types.ObjectId(userId), isActive: true, walletBalance: { $gte: dto.amount } },
-        { $inc: { walletBalance: -dto.amount } },
+        {
+          _id: new Types.ObjectId(userId),
+          isActive: true,
+          walletBalance: { $gte: dto.amount },
+          withdrawableBalance: { $gte: dto.amount },
+        },
+        { $inc: { walletBalance: -dto.amount, withdrawableBalance: -dto.amount } },
         { new: true, session }
       );
       if (!updatedUser) throw new AppError('Insufficient balance or account deactivated during withdrawal.', 402);
@@ -243,7 +248,7 @@ export class WithdrawalService {
 
       const user = await User.findOneAndUpdate(
         { _id: updated.userId, isActive: true },
-        { $inc: { walletBalance: updated.amount } },
+        { $inc: { walletBalance: updated.amount, withdrawableBalance: updated.amount } },
         { new: true, session }
       );
       if (!user) throw new AppError('User not found or inactive.', 404);

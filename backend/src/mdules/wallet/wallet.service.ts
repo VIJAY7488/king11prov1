@@ -1,6 +1,6 @@
 import mongoose, { Types } from "mongoose"
 import Transaction from "./wallet.model"
-import { CreditFromDepositDTO, PaginatedTransactions, TransactionQueryParams, TransactionRecord, TransactionStatus, TransactionType, WalletOperationResult } from "./wallet.types"
+import { CreditFromDepositDTO, PaginatedTransactions, TransactionQueryParams, TransactionRecord, TransactionStatus, TransactionType, WalletBalanceSummary, WalletOperationResult } from "./wallet.types"
 import { ClientSession } from "mongoose";
 import User from "../user/users.model";
 import AppError from "../../utils/AppError";
@@ -73,7 +73,7 @@ export class WalletService {
             // Atomic credit: single $inc round-trip, returns updated doc
             const updatedUser = await User.findOneAndUpdate(
                 { _id: new Types.ObjectId(userId), isActive: true },
-                { $inc: { walletBalance: dto.amount } },
+                { $inc: { walletBalance: dto.amount, withdrawableBalance: dto.amount } },
                 { new: true, session }
             );
 
@@ -123,17 +123,32 @@ export class WalletService {
             return { transaction: toTransactionRecord(existing), currentBalance: existing.balanceAfter };
         }
 
-        // Check balance first
+        // Check total usable balance first (withdrawable + bonus)
         const user = await User.findById(userId).session(session);
         if (!user) throw new AppError('User not found.', 404);
         if (user.walletBalance < amount) {
             throw new AppError('Insufficient wallet balance. Please add funds and try again.', 402);
         }
 
+        const bonusUsed = Math.min(user.nonWithdrawableBonusBalance, amount);
+        const withdrawableUsed = amount - bonusUsed;
+
         // Deduct balance
         const updatedUser = await User.findOneAndUpdate(
-            { _id: new Types.ObjectId(userId), isActive: true, walletBalance: { $gte: amount } },
-            { $inc: { walletBalance: -amount } },
+            {
+                _id: new Types.ObjectId(userId),
+                isActive: true,
+                walletBalance: { $gte: amount },
+                withdrawableBalance: { $gte: withdrawableUsed },
+                nonWithdrawableBonusBalance: { $gte: bonusUsed },
+            },
+            {
+                $inc: {
+                    walletBalance: -amount,
+                    withdrawableBalance: -withdrawableUsed,
+                    nonWithdrawableBonusBalance: -bonusUsed,
+                }
+            },
             { new: true, session }
         );
 
@@ -154,7 +169,7 @@ export class WalletService {
                     balanceBefore,
                     balanceAfter,
                     referenceId: walletTxnRef,
-                    metadata: { contestId, teamId }
+                    metadata: { contestId, teamId, bonusUsed, withdrawableUsed }
                 }
             ],
             { session }
@@ -181,7 +196,7 @@ export class WalletService {
 
         const updatedUser = await User.findOneAndUpdate(
             { _id: new Types.ObjectId(userId), isActive: true },
-            { $inc: { walletBalance: amount } },
+            { $inc: { walletBalance: amount, withdrawableBalance: amount } },
             { new: true }
         );
 
@@ -218,6 +233,7 @@ export class WalletService {
         userId: string,
         contestId: string,
         contestEntryId: string,
+        teamId: string,
         amount: number,
         session: ClientSession
     ): Promise<WalletOperationResult | null> {
@@ -229,9 +245,23 @@ export class WalletService {
             return { transaction: toTransactionRecord(existing), currentBalance: existing.balanceAfter };
         }
 
+        const joinTxnRef = `JOIN:${contestId}:${teamId}:${userId}`;
+        const joinTxn = await Transaction.findOne({ referenceId: joinTxnRef }).session(session);
+        const joinMeta = (joinTxn?.metadata ?? {}) as Record<string, unknown>;
+        const bonusUsed = Number(joinMeta.bonusUsed ?? 0);
+        const withdrawableUsed = Number(joinMeta.withdrawableUsed ?? amount);
+        const safeBonusRefund = Math.max(0, Math.min(amount, bonusUsed));
+        const safeWithdrawableRefund = Math.max(0, Math.min(amount - safeBonusRefund, withdrawableUsed));
+
         const updatedUser = await User.findOneAndUpdate(
             { _id: new Types.ObjectId(userId), isActive: true },
-            { $inc: { walletBalance: amount } },
+            {
+                $inc: {
+                    walletBalance: amount,
+                    withdrawableBalance: safeWithdrawableRefund,
+                    nonWithdrawableBonusBalance: safeBonusRefund,
+                }
+            },
             { new: true, session }
         );
 
@@ -258,6 +288,11 @@ export class WalletService {
                         reason: 'CONTEST_CANCELLED',
                         contestId,
                         contestEntryId,
+                        teamId,
+                        refundBreakup: {
+                            bonus: safeBonusRefund,
+                            withdrawable: safeWithdrawableRefund,
+                        },
                     },
                 }
             ],
@@ -269,10 +304,14 @@ export class WalletService {
 
     // ── Read Operations ────────────────────────────────────────────────────────
 
-    async getBalance(userId: string): Promise<number> {
-        const user = await User.findById(userId).select('walletBalance');
+    async getBalance(userId: string): Promise<WalletBalanceSummary> {
+        const user = await User.findById(userId).select('walletBalance withdrawableBalance nonWithdrawableBonusBalance');
         if (!user) throw new AppError('User not found.', 404);
-        return user.walletBalance;
+        return {
+            totalBalance: user.walletBalance,
+            withdrawableBalance: user.withdrawableBalance,
+            nonWithdrawableBonusBalance: user.nonWithdrawableBonusBalance,
+        };
     }
 
     async listTransactions(userId: string, params: TransactionQueryParams): Promise<PaginatedTransactions> {
