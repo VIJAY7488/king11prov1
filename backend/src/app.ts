@@ -3,6 +3,7 @@ import routes from './routes';
 import cors from 'cors'
 import cookieParser from "cookie-parser";
 import errorHandler from './middlewares/error.middleware';
+import config from './config/env';
 
 
 const createApp = ():Application => {
@@ -13,7 +14,12 @@ const createApp = ():Application => {
 
     app.use(
         cors({
-          origin: "https://king11pro.live",
+          origin: (origin, callback) => {
+            // Allow server-to-server and non-browser requests with no Origin header.
+            if (!origin) return callback(null, true);
+            if (config.corsOrigins.includes(origin)) return callback(null, true);
+            return callback(new Error(`CORS blocked for origin: ${origin}`));
+          },
           credentials: true,
         })
     );

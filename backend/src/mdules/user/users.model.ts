@@ -90,7 +90,7 @@ const userSchema = new Schema<IUser>({
         unique: true,
         trim: true,
         uppercase: true,
-        default: () => `USR${Math.floor(100000 + Math.random() * 900000)}`,
+        immutable: true,
         minlength: [6, 'Referral code must be at least 6 characters'],
         maxlength: [20, 'Referral code cannot exceed 20 characters'],
     },

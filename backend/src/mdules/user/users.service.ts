@@ -61,6 +61,13 @@ export class UserService {
         throw new AppError('Unable to generate referral code. Please try again.', 500);
     }
 
+    private async ensureReferralCode(user: IUser): Promise<IUser> {
+        if (user.referralCode) return user;
+        user.referralCode = await this.generateUniqueReferralCode(user.name);
+        await user.save();
+        return user;
+    }
+
     // ── Auth ──────────────────────────────────────────────────────────────────
     async register(dto: RegisterDTO): Promise<AuthResponse> {
         const existing = await User.findOne({mobileNumber: dto.mobileNumber});
@@ -112,8 +119,9 @@ export class UserService {
             throw new AppError('Your account has been deactivated. Please contact support.', 403);
         };
 
-        const tokens = signTokens(user);
-        return { user: toPublicProfile(user), tokens };
+        const safeUser = await this.ensureReferralCode(user);
+        const tokens = signTokens(safeUser);
+        return { user: toPublicProfile(safeUser), tokens };
     };
 
     async refreshTokens(refreshToken: string): Promise<AuthTokens> {
@@ -139,7 +147,8 @@ export class UserService {
     async getProfile(userId: string): Promise<UserPublicProfile> {
         const user = await User.findById(userId);
         if (!user) throw new AppError('User not found.', 404);
-        return toPublicProfile(user);
+        const safeUser = await this.ensureReferralCode(user);
+        return toPublicProfile(safeUser);
     };
 
     async updateProfile(userId: string, dto: UpdateProfileDTO): Promise<UserPublicProfile> {
