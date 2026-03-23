@@ -36,6 +36,7 @@ interface PrizeDistributionRow {
 
 interface ContestPrizeTableResponse {
   prizePool: number;
+  totalPlayers: number;
   totalWinners: number;
   distribution: PrizeDistributionRow[];
 }
@@ -106,6 +107,7 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
         const data = res.data?.data;
         const payload: ContestPrizeTableResponse = {
           prizePool: Number(data?.prizePool ?? contest.prizePool ?? 0),
+          totalPlayers: Number(data?.totalPlayers ?? 0),
           totalWinners: Number(data?.totalWinners ?? 0),
           distribution: Array.isArray(data?.distribution) ? data.distribution : [],
         };
@@ -126,6 +128,11 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
 
   const topGuaranteedRows = guaranteedPrizeTable?.distribution?.slice(0, 4) ?? [];
   const moreGuaranteedRows = Math.max(0, (guaranteedPrizeTable?.distribution?.length ?? 0) - topGuaranteedRows.length);
+
+  const winnersPercent =
+    guaranteedPrizeTable && guaranteedPrizeTable.totalPlayers > 0
+      ? Math.round((guaranteedPrizeTable.totalWinners / guaranteedPrizeTable.totalPlayers) * 100)
+      : 0;
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm border-[1.5px] border-[#E8E0D4] hover:-translate-y-1 hover:shadow-[0_14px_36px_rgba(26,18,8,.09)] transition-all duration-300">
@@ -197,7 +204,9 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
           <div className="mb-3 rounded-lg border border-[#DCC7A7] bg-[#FFF7ED] px-3 py-2.5">
             <div className="flex items-center justify-between">
               <p className="text-[0.7rem] font-black uppercase tracking-wide text-[#9A6B37]">Guaranteed Prize Ladder</p>
-              <p className="text-[0.68rem] font-bold text-[#B07A3A]">100% Winners</p>
+              <p className="text-[0.68rem] font-bold text-[#B07A3A]">
+                {winnersPercent > 0 ? `Top ${winnersPercent}% Winners` : "Tier-wise Winners"}
+              </p>
             </div>
             {loadingGuaranteedPrize ? (
               <div className="mt-2 h-10 rounded bg-[#F5E7D4] animate-pulse" />

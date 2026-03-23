@@ -300,53 +300,54 @@ export class ContestService {
     }
 
     const totalCents = Math.round(prizePool * 100);
-    if (totalCents < totalPlayers) {
-      throw new AppError('Prize pool is too small to reward 100% participants with minimum ₹0.01 each.', 422);
+    const totalWinners = Math.max(1, Math.ceil(totalPlayers * 0.5));
+    if (totalCents < totalWinners) {
+      throw new AppError('Prize pool is too small to reward top 50% participants with minimum ₹0.01 each.', 422);
     }
 
-    // Total tier share = 100%.
-    // Last tier kept at 2% to satisfy "bottom 30–50% users share 1–3% pool".
-    const tierShares = [9, 6.6, 4.5, 4, 14, 36, 23.9, 2];
+    // Final tuned guaranteed ladder split (sum = 100):
+    // 1:8%, 2:5.6%, 3:3.5%, 4-6:4.5%, 7-16:14.5%, 17-46:37%, 47-129:24.4%, last tier:2.5%
+    const tierShares = [8, 5.6, 3.5, 4.5, 14.5, 37, 24.4, 2.5];
     const tierCounts: number[] = [];
 
     tierCounts.push(1); // rank 1
-    if (totalPlayers > 1) tierCounts.push(1); // rank 2
-    if (totalPlayers > 2) tierCounts.push(1); // rank 3
+    if (totalWinners > 1) tierCounts.push(1); // rank 2
+    if (totalWinners > 2) tierCounts.push(1); // rank 3
 
     let assigned = tierCounts.reduce((a, b) => a + b, 0);
-    let remaining = totalPlayers - assigned;
+    let remaining = totalWinners - assigned;
 
     if (remaining > 0) {
-      const tier4 = Math.min(remaining, Math.max(1, Math.round(totalPlayers * 0.01)));
+      const tier4 = Math.min(remaining, Math.max(1, Math.round(totalWinners * 0.01)));
       tierCounts.push(tier4);
       assigned += tier4;
-      remaining = totalPlayers - assigned;
+      remaining = totalWinners - assigned;
     }
     if (remaining > 0) {
-      const tier5 = Math.min(remaining, Math.max(1, Math.round(totalPlayers * 0.04)));
+      const tier5 = Math.min(remaining, Math.max(1, Math.round(totalWinners * 0.04)));
       tierCounts.push(tier5);
       assigned += tier5;
-      remaining = totalPlayers - assigned;
+      remaining = totalWinners - assigned;
     }
     if (remaining > 0) {
-      const tier6 = Math.min(remaining, Math.max(1, Math.round(totalPlayers * 0.12)));
+      const tier6 = Math.min(remaining, Math.max(1, Math.round(totalWinners * 0.12)));
       tierCounts.push(tier6);
       assigned += tier6;
-      remaining = totalPlayers - assigned;
+      remaining = totalWinners - assigned;
     }
     if (remaining > 0) {
-      const tier7 = Math.min(remaining, Math.max(1, Math.round(totalPlayers * 0.33)));
+      const tier7 = Math.min(remaining, Math.max(1, Math.round(totalWinners * 0.33)));
       tierCounts.push(tier7);
       assigned += tier7;
-      remaining = totalPlayers - assigned;
+      remaining = totalWinners - assigned;
     }
     if (remaining > 0) {
       tierCounts.push(remaining); // bottom tier
       assigned += remaining;
     }
 
-    if (assigned !== totalPlayers) {
-      tierCounts[tierCounts.length - 1] += totalPlayers - assigned;
+    if (assigned !== totalWinners) {
+      tierCounts[tierCounts.length - 1] += totalWinners - assigned;
     }
 
     // Keep only shares for active tiers and normalize to 100.
@@ -410,9 +411,9 @@ export class ContestService {
     return {
       prizePool: round2(prizePool),
       totalPlayers,
-      winnerPercentage: 100,
-      normalizedWinnerPercentage: 100,
-      totalWinners: totalPlayers,
+      winnerPercentage: 50,
+      normalizedWinnerPercentage: 50,
+      totalWinners,
       distribution,
       rankPrizes: rankPrizesCents.map((c) => round2(c / 100)),
     };
