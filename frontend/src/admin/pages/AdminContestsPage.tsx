@@ -51,6 +51,16 @@ export default function AdminContestsPage() {
   }
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!isHeadToHead) return;
+    const entry = Number(form.entryFee || 0);
+    const autoPrizePool = entry > 0 ? Math.floor(entry * 2 * 0.9) : 0;
+    setForm((prev) => {
+      const nextPrizePool = autoPrizePool ? String(autoPrizePool) : "";
+      if (prev.prizePool === nextPrizePool) return prev;
+      return { ...prev, prizePool: nextPrizePool };
+    });
+  }, [isHeadToHead, form.entryFee]);
 
   function setF(k: string, v: unknown) { setForm((p) => ({ ...p, [k]: v })); }
 
@@ -141,10 +151,11 @@ export default function AdminContestsPage() {
               <label style={LABEL_STYLE}>Prize Pool (₹) *</label>
               <input
                 type="number"
-                value={form.prizePool}
+                value={isHeadToHead ? (form.prizePool || "0") : form.prizePool}
                 onChange={(e) => setF("prizePool", e.target.value)}
-                placeholder={isFreeContest ? "e.g. 5000" : "e.g. 50000"}
-                style={INPUT_STYLE}
+                placeholder={isHeadToHead ? "Auto-calculated from entry fee" : isFreeContest ? "e.g. 5000" : "e.g. 50000"}
+                disabled={isHeadToHead}
+                style={{ ...INPUT_STYLE, opacity: isHeadToHead ? 0.7 : 1 }}
               />
             </div>
             <div>
@@ -172,7 +183,7 @@ export default function AdminContestsPage() {
           </div>
           <div style={{ marginTop: 12, padding: "10px 14px", background: "#1A1A1A", borderRadius: 8, fontSize: 12, color: "#555" }}>
             💡 {isHeadToHead
-              ? "HEAD_TO_HEAD: total spots are fixed to 2, max entries per user is fixed to 1, and platform fee is 10%."
+              ? "HEAD_TO_HEAD: total spots are fixed to 2, max entries per user is fixed to 1, platform fee is 10%, and prize pool is auto-calculated from entry fee."
               : isFreeContest
               ? "FREE_LEAGUE: entry fee stays ₹0, wallet is not deducted on join, and winners are computed from joined users."
               : "totalSpots = floor((prizePool × 1.20) ÷ entryFee) — auto-calculated by backend"}
