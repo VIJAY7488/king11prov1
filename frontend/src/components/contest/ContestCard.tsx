@@ -126,8 +126,7 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
     };
   }, [contest.id, contest.isGuaranteed, contest.prizePool]);
 
-  const topGuaranteedRows = guaranteedPrizeTable?.distribution?.slice(0, 4) ?? [];
-  const moreGuaranteedRows = Math.max(0, (guaranteedPrizeTable?.distribution?.length ?? 0) - topGuaranteedRows.length);
+  const guaranteedRows = guaranteedPrizeTable?.distribution ?? [];
 
   const winnersPercent =
     guaranteedPrizeTable && guaranteedPrizeTable.totalPlayers > 0
@@ -210,9 +209,9 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
             </div>
             {loadingGuaranteedPrize ? (
               <div className="mt-2 h-10 rounded bg-[#F5E7D4] animate-pulse" />
-            ) : topGuaranteedRows.length > 0 ? (
+            ) : guaranteedRows.length > 0 ? (
               <div className="mt-2 space-y-1.5">
-                {topGuaranteedRows.map((row) => {
+                {guaranteedRows.map((row) => {
                   const rankLabel = row.fromRank === row.toRank
                     ? `#${row.fromRank}`
                     : `#${row.fromRank}–#${row.toRank}`;
@@ -223,9 +222,6 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
                     </div>
                   );
                 })}
-                {moreGuaranteedRows > 0 && (
-                  <p className="text-[0.68rem] font-semibold text-[#8A6A45]">+{moreGuaranteedRows} more tiers</p>
-                )}
               </div>
             ) : (
               <p className="mt-2 text-[0.68rem] font-semibold text-[#8A6A45]">Prize ladder will appear shortly.</p>
