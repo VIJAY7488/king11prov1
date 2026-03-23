@@ -753,24 +753,25 @@ export class ScoreService {
       const prizeDist = (contest as any).contestType === ContestType.FREE_LEAGUE 
         ? contestService.generateFreeContestDistribution((contest as any).prizePool ?? 0, Math.max(1, entries.length))
         : (() => {
+          if ((contest as any).isGuaranteed) {
+            const fixedPrizePool = Number((contest as any).prizePool ?? 0);
+            if (!Number.isFinite(fixedPrizePool) || fixedPrizePool <= 0) {
+              throw new AppError(`Invalid guaranteed prizePool for contest ${contest._id.toString()} during payout settlement.`, 500);
+            }
+            return contestService.generateGuaranteedLadderDistribution(
+              Math.round(fixedPrizePool * 100) / 100,
+              Math.max(1, entries.length)
+            );
+          }
+
           const entryFee = Number((contest as any).entryFee ?? 0);
           if (!Number.isFinite(entryFee) || entryFee <= 0) {
             throw new AppError(`Invalid entryFee for contest ${contest._id.toString()} during payout settlement.`, 500);
           }
 
           const grossCollection = entryFee * entries.length;
-          const platformFeePercent = getEffectivePlatformFeePercent(
-            (contest as any).contestType,
-            Boolean((contest as any).isGuaranteed)
-          );
+          const platformFeePercent = getEffectivePlatformFeePercent((contest as any).contestType, false);
           const netPrizePool = Math.max(0, grossCollection * (1 - platformFeePercent / 100));
-
-          if ((contest as any).isGuaranteed) {
-            return contestService.generateGuaranteedLadderDistribution(
-              Math.round(netPrizePool * 100) / 100,
-              Math.max(1, entries.length)
-            );
-          }
 
           return contestService.generatePrizeDistribution({
             prizePool: Math.round(netPrizePool * 100) / 100,

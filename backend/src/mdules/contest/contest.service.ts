@@ -361,10 +361,86 @@ export class ContestService {
       return Math.max(1, Math.floor(tierCents / count));
     });
 
-    // Enforce smooth decreasing curve (each next tier <= previous tier).
-    for (let i = 1; i < tierPerUserCents.length; i++) {
-      tierPerUserCents[i] = Math.min(tierPerUserCents[i], Math.max(1, tierPerUserCents[i - 1] - 1));
+    // Keep tier-wise structure, but ensure rank-order sanity:
+    // later tiers cannot pay more per-user than earlier tiers.
+    const redistributeExcessToTopTiers = (excessCents: number, uptoTierIndex: number): void => {
+      let remaining = excessCents;
+      if (remaining <= 0) return;
+
+      // Increase top tiers in 1-paise per-user steps so equality inside each tier is preserved.
+      while (remaining > 0) {
+        let moved = false;
+        for (let t = 0; t <= uptoTierIndex && remaining > 0; t++) {
+          const count = tierCounts[t] ?? 1;
+          if (count <= remaining) {
+            tierPerUserCents[t] = (tierPerUserCents[t] ?? 1) + 1;
+            remaining -= count;
+            moved = true;
+          }
+        }
+        // Safety: tier 0 always has count=1, but keep a fallback.
+        if (!moved) {
+          tierPerUserCents[0] = (tierPerUserCents[0] ?? 1) + remaining;
+          remaining = 0;
+        }
+      }
+    };
+
+    const enforceMonotonicByTier = (): void => {
+      for (let i = 1; i < tierPerUserCents.length; i++) {
+        const prevPerUser = tierPerUserCents[i - 1] ?? 1;
+        const currPerUser = tierPerUserCents[i] ?? 1;
+        if (currPerUser > prevPerUser) {
+          const count = tierCounts[i] ?? 1;
+          const excess = (currPerUser - prevPerUser) * count;
+          tierPerUserCents[i] = prevPerUser;
+          redistributeExcessToTopTiers(excess, i - 1);
+        }
+      }
+    };
+
+    enforceMonotonicByTier();
+
+    // Product tweak: reduce rank 1/2/3 by 15% each, move that pool to lower tiers.
+    let removedFromTop3 = 0;
+    const topTierCount = Math.min(3, tierPerUserCents.length);
+    for (let i = 0; i < topTierCount; i++) {
+      const current = tierPerUserCents[i] ?? 1;
+      const cutPerUser = Math.floor(current * 0.15);
+      if (cutPerUser <= 0) continue;
+      tierPerUserCents[i] = Math.max(1, current - cutPerUser);
+      removedFromTop3 += cutPerUser * (tierCounts[i] ?? 1);
     }
+
+    if (removedFromTop3 > 0) {
+      const lowerStart = 3;
+      let remaining = removedFromTop3;
+
+      if (tierPerUserCents.length > lowerStart) {
+        while (remaining > 0) {
+          let moved = false;
+          for (let i = lowerStart; i < tierPerUserCents.length && remaining > 0; i++) {
+            const count = tierCounts[i] ?? 1;
+            if (count > remaining) continue;
+            const cap = tierPerUserCents[i - 1] ?? 1; // keep non-increasing order
+            const current = tierPerUserCents[i] ?? 1;
+            if (current >= cap) continue;
+            tierPerUserCents[i] = current + 1;
+            remaining -= count;
+            moved = true;
+          }
+          if (!moved) break;
+        }
+      }
+
+      // Fallback for any tiny leftover that can't be distributed by full tier-step.
+      if (remaining > 0) {
+        tierPerUserCents[0] = (tierPerUserCents[0] ?? 1) + remaining;
+      }
+    }
+
+    // Re-check after applying the top-3 discount redistribution.
+    enforceMonotonicByTier();
 
     const tierFinalCents = tierPerUserCents.map((ppu, idx) => ppu * (tierCounts[idx] ?? 1));
     let distributedCents = tierFinalCents.reduce((a, b) => a + b, 0);
@@ -710,13 +786,11 @@ export class ContestService {
 
     const totalPlayers = await ContestEntry.countDocuments({ contestId: new Types.ObjectId(contestId) });
     if (contest.isGuaranteed) {
-      const platformFeePercent = getEffectivePlatformFeePercent(contest.contestType, true);
+      const platformFeePercent = 0;
       const assumedPlayers = totalPlayers > 0 ? totalPlayers : Math.max(1, Number(contest.totalSpots ?? 1));
       const fixedPrizePool = round2(Number(contest.prizePool ?? 0));
-      const grossCollection = platformFeePercent >= 100
-        ? fixedPrizePool
-        : round2(fixedPrizePool / (1 - platformFeePercent / 100));
-      const platformFee = round2(Math.max(0, grossCollection - fixedPrizePool));
+      const grossCollection = fixedPrizePool;
+      const platformFee = 0;
 
       const result = this.generateGuaranteedLadderDistribution(fixedPrizePool, assumedPlayers);
       return {
