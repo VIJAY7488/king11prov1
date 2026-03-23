@@ -208,16 +208,25 @@ teamSchema.pre('save', async function (this: ITeam) {
         throw new Error('Team must have at least 1 wicket-keeper.');
     }
 
-    // ── Rule: at least 3 bowlers ──────────────────────────────────────────────
+    // ── Rule: at least 1 bowlers ──────────────────────────────────────────────
     const bowlers = players.filter(p => p.playerRole === PlayerRole.BOWLER);
     if (bowlers.length < 1) {
         throw new Error('Team must have at least 1 bowlers.');
     }
 
-    // ── Rule: at least 4 batsmen ──────────────────────────────────────────────
+    // ── Rule: at least 2 batsmen ──────────────────────────────────────────────
     const batsmen = players.filter(p => p.playerRole === PlayerRole.BATSMAN);
     if (batsmen.length < 2) {
         throw new Error('Team must have at least 2 batsmen.');
+    }
+
+    // ── Rule: all-rounders must be between 5 and 7 (inclusive) ───────────────
+    const allRounders = players.filter(p => p.playerRole === PlayerRole.ALL_ROUNDER);
+    if (allRounders.length < 5) {
+        throw new Error('Team must have at least 5 all-rounders.');
+    }
+    if (allRounders.length > 7) {
+        throw new Error('Team can have at most 7 all-rounders.');
     }
 
     // ── Sync captainId / viceCaptainId ────────────────────────────────────────
