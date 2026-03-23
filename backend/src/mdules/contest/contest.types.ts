@@ -20,6 +20,13 @@ export enum ContestType {
 // ── Platform Fee Config ───────────────────────────────────────────────────────
 // Exported so service and model share the same constant
 export const PLATFORM_FEE_PERCENT = 20; // 20% of gross entry collection is kept by platform
+export const HEAD_TO_HEAD_PLATFORM_FEE_PERCENT = 10;
+
+export const getPlatformFeePercent = (contestType: ContestType): number => {
+  if (contestType === ContestType.HEAD_TO_HEAD) return HEAD_TO_HEAD_PLATFORM_FEE_PERCENT;
+  if (contestType === ContestType.FREE_LEAGUE) return 0;
+  return PLATFORM_FEE_PERCENT;
+};
 
 // ── Request DTOs (admin only) ─────────────────────────────────────────────────
 

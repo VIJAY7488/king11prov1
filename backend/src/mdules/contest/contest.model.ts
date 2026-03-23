@@ -1,5 +1,5 @@
 import { Schema, model, Document, Model, Types } from 'mongoose';
-import { ContestStatus, ContestType, PLATFORM_FEE_PERCENT } from './contest.types';
+import { ContestStatus, ContestType, getPlatformFeePercent } from './contest.types';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // CONTEST INTERFACE
@@ -51,7 +51,7 @@ export interface IContestModel extends Model<IContest> {
 
 // ── Exported helper — shared by pre-save hook and service ─────────────────────
 
-export function calcFinancials(prizePool: number, entryFee: number): {
+export function calcFinancials(prizePool: number, entryFee: number, contestType: ContestType): {
     platformFee: number;
     totalCollection: number;
     totalSpots: number;
@@ -64,9 +64,12 @@ export function calcFinancials(prizePool: number, entryFee: number): {
             totalSpots: 100000,
         }
     }
-    const platformFee     = Math.round(prizePool * PLATFORM_FEE_PERCENT / 100);
+    const platformFeePercent = getPlatformFeePercent(contestType);
+    const platformFee     = Math.round(prizePool * platformFeePercent / 100);
     const totalCollection = prizePool + platformFee;
-    const totalSpots      = entryFee > 0 ? Math.floor(totalCollection / entryFee) : 0;
+    const totalSpots      = contestType === ContestType.HEAD_TO_HEAD
+      ? 2
+      : (entryFee > 0 ? Math.floor(totalCollection / entryFee) : 0);
     return { platformFee, totalCollection, totalSpots };
 }
 
@@ -200,11 +203,16 @@ const contestSchema = new Schema<IContest, IContestModel>(
 contestSchema.pre('save', async function (this: IContest) {
     if (this.isModified('prizePool') || this.isModified('entryFee') || this.isNew) {
         const { platformFee, totalCollection, totalSpots } =
-            calcFinancials(this.prizePool, this.entryFee);
+            calcFinancials(this.prizePool, this.entryFee, this.contestType);
 
         this.platformFee     = platformFee;
         this.totalCollection = totalCollection;
         this.totalSpots      = totalSpots;
+    }
+
+    if (this.contestType === ContestType.HEAD_TO_HEAD) {
+      this.totalSpots = 2;
+      this.maxEntriesPerUser = 1;
     }
 
     if (this.contestType !== ContestType.FREE_LEAGUE && this.totalSpots < 2) {

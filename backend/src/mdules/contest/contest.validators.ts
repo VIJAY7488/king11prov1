@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { ContestType, ContestStatus, PLATFORM_FEE_PERCENT } from './contest.types';
+import { ContestType, ContestStatus } from './contest.types';
 
 
 // ── Admin: Create Contest ─────────────────────────────────────────────────────
@@ -49,8 +49,14 @@ export const createContestSchema = Joi.object({
   //   totalSpots     = floor(totalCollection / entryFee)
 
 
-  maxEntriesPerUser: Joi.number().integer().min(1).max(10).default(1)
-    .messages({ 'number.max': 'Max entries per user cannot exceed 10' }),
+  maxEntriesPerUser: Joi.when('contestType', {
+    is: ContestType.HEAD_TO_HEAD,
+    then: Joi.number().valid(1).default(1).messages({
+      'any.only': 'HEAD_TO_HEAD contest maxEntriesPerUser must be 1',
+    }),
+    otherwise: Joi.number().integer().min(1).max(10).default(1)
+      .messages({ 'number.max': 'Max entries per user cannot exceed 10' }),
+  }),
 
   isGuaranteed: Joi.boolean().default(false),
 

@@ -34,6 +34,7 @@ export default function AdminContestsPage() {
   });
   const [saving, setSaving] = useState(false);
   const isFreeContest = form.contestType === "FREE_LEAGUE";
+  const isHeadToHead = form.contestType === "HEAD_TO_HEAD";
 
   // Patch status
   const [patchId,     setPatchId]     = useState("");
@@ -63,7 +64,7 @@ export default function AdminContestsPage() {
         ...form,
         entryFee: isFreeContest ? 0 : Number(form.entryFee),
         prizePool: Number(form.prizePool),
-        maxEntriesPerUser: Number(form.maxEntriesPerUser),
+        maxEntriesPerUser: isHeadToHead ? 1 : Number(form.maxEntriesPerUser),
       });
       setShowForm(false);
       setForm({ matchId: "", name: "", contestType: "MEGA_LEAGUE", entryFee: "", prizePool: "", maxEntriesPerUser: "1", isGuaranteed: false, status: "DRAFT" });
@@ -117,7 +118,8 @@ export default function AdminContestsPage() {
                 onChange={(e) => {
                   const type = e.target.value;
                   setF("contestType", type);
-                  if(type === "FREE_LEAGUE") setF("entryFee", "0");
+                  if (type === "FREE_LEAGUE") setF("entryFee", "0");
+                  if (type === "HEAD_TO_HEAD") setF("maxEntriesPerUser", "1");
                 }}
                 style={{...INPUT_STYLE, appearance: "none"}}>
                   {["MEGA_LEAGUE", "HEAD_TO_HEAD", "SMALL_LEAGUE", "FREE_LEAGUE"].map((t) => 
@@ -147,7 +149,14 @@ export default function AdminContestsPage() {
             </div>
             <div>
               <label style={LABEL_STYLE}>Max Entries / User</label>
-              <input type="number" value={form.maxEntriesPerUser} onChange={(e) => setF("maxEntriesPerUser", e.target.value)} placeholder="1" style={INPUT_STYLE} />
+              <input
+                type="number"
+                value={isHeadToHead ? "1" : form.maxEntriesPerUser}
+                onChange={(e) => setF("maxEntriesPerUser", e.target.value)}
+                placeholder="1"
+                disabled={isHeadToHead}
+                style={{ ...INPUT_STYLE, opacity: isHeadToHead ? 0.7 : 1 }}
+              />
             </div>
             <div>
               <label style={LABEL_STYLE}>Initial Status</label>
@@ -162,7 +171,9 @@ export default function AdminContestsPage() {
             </div>
           </div>
           <div style={{ marginTop: 12, padding: "10px 14px", background: "#1A1A1A", borderRadius: 8, fontSize: 12, color: "#555" }}>
-            💡 {isFreeContest
+            💡 {isHeadToHead
+              ? "HEAD_TO_HEAD: total spots are fixed to 2, max entries per user is fixed to 1, and platform fee is 10%."
+              : isFreeContest
               ? "FREE_LEAGUE: entry fee stays ₹0, wallet is not deducted on join, and winners are computed from joined users."
               : "totalSpots = floor((prizePool × 1.20) ÷ entryFee) — auto-calculated by backend"}
           </div>

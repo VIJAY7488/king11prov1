@@ -6,7 +6,7 @@ import { PlayerScore, IPlayerScore }     from './score.model';
 import { ContestEntry, Contest }         from '../contest/contest.model';
 import { Team }                          from '../team/team.model';
 import { Match }                         from '../match/match.model';
-import { ContestStatus, ContestType, PLATFORM_FEE_PERCENT } from '../contest/contest.types';
+import { ContestStatus, ContestType, getPlatformFeePercent } from '../contest/contest.types';
 import contestService                    from '../contest/contest.service';
 import walletService                     from '../wallet/wallet.service';
 import { MatchStatus }                   from '../match/match.types';
@@ -759,7 +759,8 @@ export class ScoreService {
           }
 
           const grossCollection = entryFee * entries.length;
-          const netPrizePool = Math.max(0, grossCollection * (1 - PLATFORM_FEE_PERCENT / 100));
+          const platformFeePercent = getPlatformFeePercent((contest as any).contestType);
+          const netPrizePool = Math.max(0, grossCollection * (1 - platformFeePercent / 100));
 
           return contestService.generatePrizeDistribution({
             prizePool: Math.round(netPrizePool * 100) / 100,

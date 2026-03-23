@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import AppError from "../../utils/AppError";
-import { ContestType, PLATFORM_FEE_PERCENT } from "./contest.types";
+import { ContestType, getPlatformFeePercent } from "./contest.types";
 import asyncHandler from "../../utils/asyncHandler";
 import contestService from "./contest.service";
 
@@ -52,11 +52,12 @@ export class ContestController {
   */
   adminCreateContest = asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const contest = await contestService.createContest(req.body);
+      const platformFeePercent = getPlatformFeePercent(contest.contestType);
       const message = contest.contestType === ContestType.FREE_LEAGUE ? 
         `Contest "${contest.name}" created successfully as FREE_LEAGUE. Entry fee is ₹0 and wallet will not be deducted on join.`
         : `Contest "${contest.name}" created successfully. ` +
         `totalSpots auto-calculated: ${contest.totalSpots} ` +
-        `(₹${contest.prizePool} pool + ${PLATFORM_FEE_PERCENT}% fee ₹${contest.platformFee} ` +
+        `(₹${contest.prizePool} pool + ${platformFeePercent}% fee ₹${contest.platformFee} ` +
         `= ₹${contest.totalCollection} ÷ ₹${contest.entryFee}/entry).`;
       
         res.status(201).json({

@@ -1,6 +1,6 @@
 import mongoose, { ClientSession, Types } from "mongoose";
 import { calcFinancials, Contest, ContestEntry, IContest } from "./contest.model";
-import { ContestPublic, ContestQueryParams, ContestStatus, ContestType, CreateContestDTO, JoinedContestPublic, PaginatedContests, PLATFORM_FEE_PERCENT, PrizeDistributionInput, PrizeDistributionResult, UpdateContestDTO } from "./contest.types";
+import { ContestPublic, ContestQueryParams, ContestStatus, ContestType, CreateContestDTO, getPlatformFeePercent, JoinedContestPublic, PaginatedContests, PrizeDistributionInput, PrizeDistributionResult, UpdateContestDTO } from "./contest.types";
 import AppError from "../../utils/AppError";
 import { MatchStatus } from "../match/match.types";
 
@@ -56,7 +56,7 @@ const toContestPublic = (doc: ContestDocLike): ContestPublic => ({
   entryFee: doc.entryFee,
   prizePool: doc.prizePool,
   platformFee: doc.platformFee,
-  platformFeePercent: PLATFORM_FEE_PERCENT,
+  platformFeePercent: getPlatformFeePercent(doc.contestType),
   totalCollection: doc.totalCollection,
   totalSpots: doc.totalSpots,
   filledSpots: doc.filledSpots,
@@ -224,15 +224,17 @@ export class ContestService {
     return result.rankPrizes[rank - 1];
   }
 
-  private netPrizePoolFromCollection(grossCollection: number): {
+  private netPrizePoolFromCollection(grossCollection: number, contestType: ContestType): {
     grossCollection: number;
     platformFee: number;
     distributablePrizePool: number;
+    platformFeePercent: number;
   } {
+    const platformFeePercent = getPlatformFeePercent(contestType);
     const gross = round2(grossCollection);
-    const platformFee = round2((gross * PLATFORM_FEE_PERCENT) / 100);
+    const platformFee = round2((gross * platformFeePercent) / 100);
     const distributablePrizePool = round2(Math.max(0, gross - platformFee));
-    return { grossCollection: gross, platformFee, distributablePrizePool };
+    return { grossCollection: gross, platformFee, distributablePrizePool, platformFeePercent };
   }
 
   generateFreeContestDistribution(prizePool: number, totalPlayers: number): PrizeDistributionResult {
@@ -309,7 +311,7 @@ export class ContestService {
 
     // Pre-validate that the calculated totalSpots would be ≥ 2
     const { totalSpots } =
-      calcFinancials(dto.prizePool, dto.entryFee);
+      calcFinancials(dto.prizePool, dto.entryFee, dto.contestType);
 
     if (dto.contestType !== ContestType.FREE_LEAGUE && totalSpots < 2) {
       throw new AppError(
@@ -326,6 +328,10 @@ export class ContestService {
 
     const contestName = dto.name || `${match.team1Name} vs ${match.team2Name}`;
 
+    const enforcedMaxEntriesPerUser = dto.contestType === ContestType.HEAD_TO_HEAD
+      ? 1
+      : (dto.maxEntriesPerUser ?? 1);
+
     const contest = await Contest.create({
       matchId: dto.matchId,
       name: contestName,
@@ -333,7 +339,7 @@ export class ContestService {
       entryFee: dto.entryFee,
       prizePool: dto.prizePool,
       // platformFee, totalCollection, totalSpots written by pre-save hook
-      maxEntriesPerUser: dto.maxEntriesPerUser ?? 1,
+      maxEntriesPerUser: enforcedMaxEntriesPerUser,
       isGuaranteed: dto.isGuaranteed ?? false,
       description: dto.description,
       status: dto.status ?? ContestStatus.DRAFT,
@@ -436,13 +442,19 @@ export class ContestService {
       }
     }
 
+    if (contest.contestType === ContestType.HEAD_TO_HEAD && dto.maxEntriesPerUser !== undefined && dto.maxEntriesPerUser !== 1) {
+      throw new AppError('HEAD_TO_HEAD contest maxEntriesPerUser is fixed at 1.', 422);
+    }
+
     // Build the update — pre-save hook recalculates financials if needed
     const updateFields: Partial<IContest> = {};
     if (dto.name              !== undefined) updateFields.name              = dto.name;
     if (dto.description       !== undefined) updateFields.description       = dto.description;
     if (dto.entryFee          !== undefined) updateFields.entryFee          = dto.entryFee;
     if (dto.prizePool         !== undefined) updateFields.prizePool         = dto.prizePool;
-    if (dto.maxEntriesPerUser !== undefined) updateFields.maxEntriesPerUser = dto.maxEntriesPerUser;
+    if (contest.contestType !== ContestType.HEAD_TO_HEAD && dto.maxEntriesPerUser !== undefined) {
+      updateFields.maxEntriesPerUser = dto.maxEntriesPerUser;
+    }
     if (dto.isGuaranteed      !== undefined) updateFields.isGuaranteed      = dto.isGuaranteed;
     if (dto.status            !== undefined) updateFields.status            = dto.status;
     if (dto.closedAt          !== undefined) updateFields.closedAt          = dto.closedAt;
@@ -569,7 +581,7 @@ export class ContestService {
       return {
         prizePool: 0,
         grossCollection: 0,
-        platformFeePercent: PLATFORM_FEE_PERCENT,
+        platformFeePercent: getPlatformFeePercent(contest.contestType),
         platformFee: 0,
         totalPlayers: 0,
         winnerPercentage: round2(winnerPercentage),
@@ -595,7 +607,7 @@ export class ContestService {
     }
 
     const grossCollection = contest.entryFee * totalPlayers;
-    const { distributablePrizePool, platformFee } = this.netPrizePoolFromCollection(grossCollection);
+    const { distributablePrizePool, platformFee, platformFeePercent } = this.netPrizePoolFromCollection(grossCollection, contest.contestType);
     const result = this.generatePrizeDistribution({
       prizePool: distributablePrizePool,
       totalPlayers,
@@ -605,7 +617,7 @@ export class ContestService {
     return {
       ...result,
       grossCollection: round2(grossCollection),
-      platformFeePercent: PLATFORM_FEE_PERCENT,
+      platformFeePercent,
       platformFee,
     };
   }
