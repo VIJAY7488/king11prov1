@@ -1,6 +1,6 @@
 import mongoose, { ClientSession, Types } from "mongoose";
 import { calcFinancials, Contest, ContestEntry, IContest } from "./contest.model";
-import { ContestPublic, ContestQueryParams, ContestStatus, ContestType, CreateContestDTO, getPlatformFeePercent, JoinedContestPublic, PaginatedContests, PrizeDistributionInput, PrizeDistributionResult, UpdateContestDTO } from "./contest.types";
+import { ContestPublic, ContestQueryParams, ContestStatus, ContestType, CreateContestDTO, getEffectivePlatformFeePercent, JoinedContestPublic, PaginatedContests, PrizeDistributionInput, PrizeDistributionResult, UpdateContestDTO } from "./contest.types";
 import AppError from "../../utils/AppError";
 import { MatchStatus } from "../match/match.types";
 
@@ -56,7 +56,7 @@ const toContestPublic = (doc: ContestDocLike): ContestPublic => ({
   entryFee: doc.entryFee,
   prizePool: doc.prizePool,
   platformFee: doc.platformFee,
-  platformFeePercent: getPlatformFeePercent(doc.contestType),
+  platformFeePercent: getEffectivePlatformFeePercent(doc.contestType, doc.isGuaranteed),
   totalCollection: doc.totalCollection,
   totalSpots: doc.totalSpots,
   filledSpots: doc.filledSpots,
@@ -224,13 +224,17 @@ export class ContestService {
     return result.rankPrizes[rank - 1];
   }
 
-  private netPrizePoolFromCollection(grossCollection: number, contestType: ContestType): {
+  private netPrizePoolFromCollection(
+    grossCollection: number,
+    contestType: ContestType,
+    isGuaranteed = false
+  ): {
     grossCollection: number;
     platformFee: number;
     distributablePrizePool: number;
     platformFeePercent: number;
   } {
-    const platformFeePercent = getPlatformFeePercent(contestType);
+    const platformFeePercent = getEffectivePlatformFeePercent(contestType, isGuaranteed);
     const gross = round2(grossCollection);
     const platformFee = round2((gross * platformFeePercent) / 100);
     const distributablePrizePool = round2(Math.max(0, gross - platformFee));
@@ -287,6 +291,133 @@ export class ContestService {
     };
   }
 
+  generateGuaranteedLadderDistribution(prizePool: number, totalPlayers: number): PrizeDistributionResult {
+    if (!Number.isFinite(prizePool) || prizePool <= 0) {
+      throw new AppError('prizePool must be greater than 0.', 422);
+    }
+    if (!Number.isInteger(totalPlayers) || totalPlayers < 1) {
+      throw new AppError('totalPlayers must be at least 1.', 422);
+    }
+
+    const totalCents = Math.round(prizePool * 100);
+    if (totalCents < totalPlayers) {
+      throw new AppError('Prize pool is too small to reward 100% participants with minimum ₹0.01 each.', 422);
+    }
+
+    // Total tier share = 100%.
+    // Last tier kept at 2% to satisfy "bottom 30–50% users share 1–3% pool".
+    const tierShares = [9, 6.6, 4.5, 4, 14, 36, 23.9, 2];
+    const tierCounts: number[] = [];
+
+    tierCounts.push(1); // rank 1
+    if (totalPlayers > 1) tierCounts.push(1); // rank 2
+    if (totalPlayers > 2) tierCounts.push(1); // rank 3
+
+    let assigned = tierCounts.reduce((a, b) => a + b, 0);
+    let remaining = totalPlayers - assigned;
+
+    if (remaining > 0) {
+      const tier4 = Math.min(remaining, Math.max(1, Math.round(totalPlayers * 0.01)));
+      tierCounts.push(tier4);
+      assigned += tier4;
+      remaining = totalPlayers - assigned;
+    }
+    if (remaining > 0) {
+      const tier5 = Math.min(remaining, Math.max(1, Math.round(totalPlayers * 0.04)));
+      tierCounts.push(tier5);
+      assigned += tier5;
+      remaining = totalPlayers - assigned;
+    }
+    if (remaining > 0) {
+      const tier6 = Math.min(remaining, Math.max(1, Math.round(totalPlayers * 0.12)));
+      tierCounts.push(tier6);
+      assigned += tier6;
+      remaining = totalPlayers - assigned;
+    }
+    if (remaining > 0) {
+      const tier7 = Math.min(remaining, Math.max(1, Math.round(totalPlayers * 0.33)));
+      tierCounts.push(tier7);
+      assigned += tier7;
+      remaining = totalPlayers - assigned;
+    }
+    if (remaining > 0) {
+      tierCounts.push(remaining); // bottom tier
+      assigned += remaining;
+    }
+
+    if (assigned !== totalPlayers) {
+      tierCounts[tierCounts.length - 1] += totalPlayers - assigned;
+    }
+
+    // Keep only shares for active tiers and normalize to 100.
+    const activeShares = tierShares.slice(0, tierCounts.length);
+    const activeShareSum = activeShares.reduce((a, b) => a + b, 0);
+    const normalizedShares = activeShares.map((s) => (s * 100) / activeShareSum);
+
+    const tierTargetCents = normalizedShares.map((share) => Math.floor((totalCents * share) / 100));
+    const tierPerUserCents = tierTargetCents.map((tierCents, idx) => {
+      const count = tierCounts[idx] ?? 1;
+      return Math.max(1, Math.floor(tierCents / count));
+    });
+
+    // Enforce smooth decreasing curve (each next tier <= previous tier).
+    for (let i = 1; i < tierPerUserCents.length; i++) {
+      tierPerUserCents[i] = Math.min(tierPerUserCents[i], Math.max(1, tierPerUserCents[i - 1] - 1));
+    }
+
+    const tierFinalCents = tierPerUserCents.map((ppu, idx) => ppu * (tierCounts[idx] ?? 1));
+    let distributedCents = tierFinalCents.reduce((a, b) => a + b, 0);
+    let delta = totalCents - distributedCents;
+
+    // Push any rounding delta to rank 1 (single winner) to keep tiers equal.
+    if (delta !== 0 && tierCounts[0] === 1) {
+      tierPerUserCents[0] += delta;
+      tierFinalCents[0] = tierPerUserCents[0];
+      distributedCents = tierFinalCents.reduce((a, b) => a + b, 0);
+      delta = totalCents - distributedCents;
+    }
+    if (delta !== 0) {
+      // Final fallback for safety in extremely edge cases.
+      tierPerUserCents[0] += delta;
+      tierFinalCents[0] = tierPerUserCents[0] * (tierCounts[0] ?? 1);
+    }
+
+    const rankPrizesCents: number[] = [];
+    const distribution: PrizeDistributionResult["distribution"] = [];
+    let currentRank = 1;
+
+    for (let i = 0; i < tierCounts.length; i++) {
+      const winnersCount = tierCounts[i] ?? 0;
+      if (winnersCount <= 0) continue;
+
+      const perUserCents = tierPerUserCents[i] ?? 1;
+      for (let k = 0; k < winnersCount; k++) rankPrizesCents.push(perUserCents);
+
+      const fromRank = currentRank;
+      const toRank = currentRank + winnersCount - 1;
+      const totalAmount = round2((perUserCents * winnersCount) / 100);
+      distribution.push({
+        fromRank,
+        toRank,
+        winnersCount,
+        poolPercentage: round2((totalAmount / prizePool) * 100),
+        amountPerRank: round2(perUserCents / 100),
+        totalAmount,
+      });
+      currentRank = toRank + 1;
+    }
+
+    return {
+      prizePool: round2(prizePool),
+      totalPlayers,
+      winnerPercentage: 100,
+      normalizedWinnerPercentage: 100,
+      totalWinners: totalPlayers,
+      distribution,
+      rankPrizes: rankPrizesCents.map((c) => round2(c / 100)),
+    };
+  }
+
   // ── ADMIN: Create Contest ──────────────────────────────────────────────────
   /**
    * Admin provides: matchId, name, contestType, entryFee, prizePool.
@@ -311,7 +442,7 @@ export class ContestService {
 
     // Pre-validate that the calculated totalSpots would be ≥ 2
     const { totalSpots } =
-      calcFinancials(dto.prizePool, dto.entryFee, dto.contestType);
+      calcFinancials(dto.prizePool, dto.entryFee, dto.contestType, dto.isGuaranteed ?? false);
 
     if (dto.contestType !== ContestType.FREE_LEAGUE && totalSpots < 2) {
       throw new AppError(
@@ -573,15 +704,33 @@ export class ContestService {
   }
 
   async getContestPrizeDistribution(contestId: string, winnerPercentage = 25): Promise<PrizeDistributionResult> {
-    const contest = await Contest.findById(contestId).select('entryFee contestType prizePool').lean();
+    const contest = await Contest.findById(contestId).select('entryFee contestType prizePool isGuaranteed totalSpots').lean();
     if (!contest) throw new AppError('Contest not found.', 404);
 
     const totalPlayers = await ContestEntry.countDocuments({ contestId: new Types.ObjectId(contestId) });
+    if (contest.isGuaranteed) {
+      const platformFeePercent = getEffectivePlatformFeePercent(contest.contestType, true);
+      const assumedPlayers = totalPlayers > 0 ? totalPlayers : Math.max(1, Number(contest.totalSpots ?? 1));
+      const fixedPrizePool = round2(Number(contest.prizePool ?? 0));
+      const grossCollection = platformFeePercent >= 100
+        ? fixedPrizePool
+        : round2(fixedPrizePool / (1 - platformFeePercent / 100));
+      const platformFee = round2(Math.max(0, grossCollection - fixedPrizePool));
+
+      const result = this.generateGuaranteedLadderDistribution(fixedPrizePool, assumedPlayers);
+      return {
+        ...result,
+        grossCollection,
+        platformFeePercent,
+        platformFee,
+      };
+    }
+
     if (totalPlayers < 1) {
       return {
         prizePool: 0,
         grossCollection: 0,
-        platformFeePercent: getPlatformFeePercent(contest.contestType),
+        platformFeePercent: getEffectivePlatformFeePercent(contest.contestType, false),
         platformFee: 0,
         totalPlayers: 0,
         winnerPercentage: round2(winnerPercentage),
@@ -607,7 +756,11 @@ export class ContestService {
     }
 
     const grossCollection = contest.entryFee * totalPlayers;
-    const { distributablePrizePool, platformFee, platformFeePercent } = this.netPrizePoolFromCollection(grossCollection, contest.contestType);
+    const { distributablePrizePool, platformFee, platformFeePercent } = this.netPrizePoolFromCollection(
+      grossCollection,
+      contest.contestType,
+      contest.isGuaranteed
+    );
     const result = this.generatePrizeDistribution({
       prizePool: distributablePrizePool,
       totalPlayers,

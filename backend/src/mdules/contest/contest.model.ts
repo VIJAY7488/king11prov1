@@ -1,5 +1,5 @@
 import { Schema, model, Document, Model, Types } from 'mongoose';
-import { ContestStatus, ContestType, getPlatformFeePercent } from './contest.types';
+import { ContestStatus, ContestType, getEffectivePlatformFeePercent } from './contest.types';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // CONTEST INTERFACE
@@ -51,7 +51,12 @@ export interface IContestModel extends Model<IContest> {
 
 // ── Exported helper — shared by pre-save hook and service ─────────────────────
 
-export function calcFinancials(prizePool: number, entryFee: number, contestType: ContestType): {
+export function calcFinancials(
+    prizePool: number,
+    entryFee: number,
+    contestType: ContestType,
+    isGuaranteed = false
+): {
     platformFee: number;
     totalCollection: number;
     totalSpots: number;
@@ -64,7 +69,7 @@ export function calcFinancials(prizePool: number, entryFee: number, contestType:
             totalSpots: 100000,
         }
     }
-    const platformFeePercent = getPlatformFeePercent(contestType);
+    const platformFeePercent = getEffectivePlatformFeePercent(contestType, isGuaranteed);
     const platformFee     = Math.round(prizePool * platformFeePercent / 100);
     const totalCollection = prizePool + platformFee;
     const totalSpots      = contestType === ContestType.HEAD_TO_HEAD
@@ -203,7 +208,7 @@ const contestSchema = new Schema<IContest, IContestModel>(
 contestSchema.pre('save', async function (this: IContest) {
     if (this.isModified('prizePool') || this.isModified('entryFee') || this.isNew) {
         const { platformFee, totalCollection, totalSpots } =
-            calcFinancials(this.prizePool, this.entryFee, this.contestType);
+            calcFinancials(this.prizePool, this.entryFee, this.contestType, this.isGuaranteed);
 
         this.platformFee     = platformFee;
         this.totalCollection = totalCollection;

@@ -21,11 +21,21 @@ export enum ContestType {
 // Exported so service and model share the same constant
 export const PLATFORM_FEE_PERCENT = 20; // 20% of gross entry collection is kept by platform
 export const HEAD_TO_HEAD_PLATFORM_FEE_PERCENT = 10;
+export const GUARANTEED_PLATFORM_FEE_PERCENT = 15;
 
 export const getPlatformFeePercent = (contestType: ContestType): number => {
   if (contestType === ContestType.HEAD_TO_HEAD) return HEAD_TO_HEAD_PLATFORM_FEE_PERCENT;
   if (contestType === ContestType.FREE_LEAGUE) return 0;
   return PLATFORM_FEE_PERCENT;
+};
+
+export const getEffectivePlatformFeePercent = (
+  contestType: ContestType,
+  isGuaranteed = false
+): number => {
+  if (contestType === ContestType.FREE_LEAGUE) return 0;
+  if (isGuaranteed) return GUARANTEED_PLATFORM_FEE_PERCENT;
+  return getPlatformFeePercent(contestType);
 };
 
 // ── Request DTOs (admin only) ─────────────────────────────────────────────────
@@ -146,6 +156,7 @@ export interface PrizeDistributionRow {
   fromRank: number;
   toRank: number;
   winnersCount: number;
+  poolPercentage?: number;
   amountPerRank: number;
   totalAmount: number;
 }

@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
+
 export interface Contest {
   id: string;
   matchId: string;
@@ -22,6 +25,23 @@ interface ContestCardProps {
   onJoin: (c: Contest) => void;
 }
 
+interface PrizeDistributionRow {
+  fromRank: number;
+  toRank: number;
+  winnersCount: number;
+  poolPercentage?: number;
+  amountPerRank: number;
+  totalAmount: number;
+}
+
+interface ContestPrizeTableResponse {
+  prizePool: number;
+  totalWinners: number;
+  distribution: PrizeDistributionRow[];
+}
+
+const guaranteedPrizeCache = new Map<string, ContestPrizeTableResponse>();
+
 function formatPrize(amount: number): string {
   if (amount >= 1_00_00_000) return `₹${(amount / 1_00_00_000).toFixed(0)} Cr`;
   if (amount >= 1_00_000) return `₹${(amount / 1_00_000).toFixed(0)}L`;
@@ -39,6 +59,9 @@ const statusStyle = (status: string) => {
 };
 
 export function ContestCard({ contest, onJoin }: ContestCardProps) {
+  const [guaranteedPrizeTable, setGuaranteedPrizeTable] = useState<ContestPrizeTableResponse | null>(null);
+  const [loadingGuaranteedPrize, setLoadingGuaranteedPrize] = useState(false);
+
   const m = contest.match;
   const filled = Math.max(0, Math.min(100, contest.fillPercentage ?? 0));
   const available = Math.max(0, contest.availableSpots ?? (contest.totalSpots - contest.filledSpots));
@@ -63,6 +86,46 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
       : matchStatus === "LIVE"
         ? "LIVE"
         : contest.status;
+
+  useEffect(() => {
+    if (!contest.isGuaranteed) return;
+
+    const cached = guaranteedPrizeCache.get(contest.id);
+    if (cached) {
+      setGuaranteedPrizeTable(cached);
+      return;
+    }
+
+    let cancelled = false;
+    const loadGuaranteedPrize = async () => {
+      setLoadingGuaranteedPrize(true);
+      try {
+        const res = await api.get(`/contests/${contest.id}/prize-table`, {
+          cache: { ttlMs: 60_000, key: `contest-prize-table:${contest.id}` },
+        });
+        const data = res.data?.data;
+        const payload: ContestPrizeTableResponse = {
+          prizePool: Number(data?.prizePool ?? contest.prizePool ?? 0),
+          totalWinners: Number(data?.totalWinners ?? 0),
+          distribution: Array.isArray(data?.distribution) ? data.distribution : [],
+        };
+        guaranteedPrizeCache.set(contest.id, payload);
+        if (!cancelled) setGuaranteedPrizeTable(payload);
+      } catch {
+        if (!cancelled) setGuaranteedPrizeTable(null);
+      } finally {
+        if (!cancelled) setLoadingGuaranteedPrize(false);
+      }
+    };
+
+    loadGuaranteedPrize();
+    return () => {
+      cancelled = true;
+    };
+  }, [contest.id, contest.isGuaranteed, contest.prizePool]);
+
+  const topGuaranteedRows = guaranteedPrizeTable?.distribution?.slice(0, 4) ?? [];
+  const moreGuaranteedRows = Math.max(0, (guaranteedPrizeTable?.distribution?.length ?? 0) - topGuaranteedRows.length);
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm border-[1.5px] border-[#E8E0D4] hover:-translate-y-1 hover:shadow-[0_14px_36px_rgba(26,18,8,.09)] transition-all duration-300">
@@ -129,6 +192,37 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
             </div>
           )}
         </div>
+
+        {contest.isGuaranteed && (
+          <div className="mb-3 rounded-lg border border-[#DCC7A7] bg-[#FFF7ED] px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <p className="text-[0.7rem] font-black uppercase tracking-wide text-[#9A6B37]">Guaranteed Prize Ladder</p>
+              <p className="text-[0.68rem] font-bold text-[#B07A3A]">100% Winners</p>
+            </div>
+            {loadingGuaranteedPrize ? (
+              <div className="mt-2 h-10 rounded bg-[#F5E7D4] animate-pulse" />
+            ) : topGuaranteedRows.length > 0 ? (
+              <div className="mt-2 space-y-1.5">
+                {topGuaranteedRows.map((row) => {
+                  const rankLabel = row.fromRank === row.toRank
+                    ? `#${row.fromRank}`
+                    : `#${row.fromRank}–#${row.toRank}`;
+                  return (
+                    <div key={`${row.fromRank}-${row.toRank}`} className="flex items-center justify-between text-[0.72rem]">
+                      <span className="font-bold text-[#6C4A20]">{rankLabel}</span>
+                      <span className="font-black text-[#EA4800]">₹{Number(row.amountPerRank ?? 0).toFixed(2)}</span>
+                    </div>
+                  );
+                })}
+                {moreGuaranteedRows > 0 && (
+                  <p className="text-[0.68rem] font-semibold text-[#8A6A45]">+{moreGuaranteedRows} more tiers</p>
+                )}
+              </div>
+            ) : (
+              <p className="mt-2 text-[0.68rem] font-semibold text-[#8A6A45]">Prize ladder will appear shortly.</p>
+            )}
+          </div>
+        )}
 
         <button
           disabled={!isActionable}
