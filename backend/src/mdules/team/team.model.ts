@@ -210,14 +210,14 @@ teamSchema.pre('save', async function (this: ITeam) {
 
     // ── Rule: at least 3 bowlers ──────────────────────────────────────────────
     const bowlers = players.filter(p => p.playerRole === PlayerRole.BOWLER);
-    if (bowlers.length < 3) {
-        throw new Error('Team must have at least 3 bowlers.');
+    if (bowlers.length < 1) {
+        throw new Error('Team must have at least 1 bowlers.');
     }
 
     // ── Rule: at least 4 batsmen ──────────────────────────────────────────────
     const batsmen = players.filter(p => p.playerRole === PlayerRole.BATSMAN);
-    if (batsmen.length < 4) {
-        throw new Error('Team must have at least 4 batsmen.');
+    if (batsmen.length < 2) {
+        throw new Error('Team must have at least 2 batsmen.');
     }
 
     // ── Sync captainId / viceCaptainId ────────────────────────────────────────
