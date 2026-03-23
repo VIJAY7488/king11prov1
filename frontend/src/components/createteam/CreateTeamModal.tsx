@@ -38,8 +38,8 @@ function formatTeamSaveError(error: unknown): string {
 
   if (normalized.includes("at least 4 batsmen")) return "Please select at least 4 batsmen.";
   if (normalized.includes("at least 3 bowlers")) return "Please select at least 3 bowlers.";
-  if (normalized.includes("at least 5 all-rounders")) return "Please select at least 5 all-rounders.";
-  if (normalized.includes("at most 7 all-rounders")) return "Please select at most 7 all-rounders.";
+  if (normalized.includes("at least 1 all-rounder")) return "Please select at least 1 all-rounder.";
+  if (normalized.includes("at most 8 all-rounders")) return "Please select at most 8 all-rounders.";
   if (normalized.includes("at least 1 wicket-keeper")) return "Please select at least 1 wicket-keeper.";
   if (normalized.includes("exactly 11 players")) return "Please select exactly 11 players.";
   if (normalized.includes("exactly 1 captain")) return "Please select exactly 1 captain.";
@@ -164,7 +164,7 @@ export function CreateTeamModal({
     if ((rc.WICKET_KEEPER || 0) > 4) return false;
     if ((rc.BOWLER || 0) > 6) return false;
     if ((rc.BATSMAN || 0) > 6) return false;
-    if ((rc.ALL_ROUNDER || 0) > 7) return false;
+    if ((rc.ALL_ROUNDER || 0) > 8) return false;
     return true;
   }
 
@@ -224,7 +224,7 @@ export function CreateTeamModal({
   function canNext() {
     if (step === 0) {
       const arCount = roleCounts.ALL_ROUNDER || 0;
-      return selected.length === 11 && arCount >= 5 && arCount <= 7;
+      return selected.length === 11 && arCount >= 1 && arCount <= 8;
     }
     if (step === 1) return captain && vc && captain._id !== vc._id;
     return true;

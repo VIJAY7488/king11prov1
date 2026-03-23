@@ -220,13 +220,13 @@ teamSchema.pre('save', async function (this: ITeam) {
         throw new Error('Team must have at least 2 batsmen.');
     }
 
-    // ── Rule: all-rounders must be between 5 and 7 (inclusive) ───────────────
+    // ── Rule: all-rounders must be between 1 and 8 (inclusive) ───────────────
     const allRounders = players.filter(p => p.playerRole === PlayerRole.ALL_ROUNDER);
-    if (allRounders.length < 5) {
-        throw new Error('Team must have at least 5 all-rounders.');
+    if (allRounders.length < 1) {
+        throw new Error('Team must have at least 1 all-rounder.');
     }
-    if (allRounders.length > 7) {
-        throw new Error('Team can have at most 7 all-rounders.');
+    if (allRounders.length > 8) {
+        throw new Error('Team can have at most 8 all-rounders.');
     }
 
     // ── Sync captainId / viceCaptainId ────────────────────────────────────────
