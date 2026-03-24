@@ -59,7 +59,24 @@ export interface WsState {
   pointsMap: Map<string, number>;
 }
 
-const WS_BASE = "ws://localhost:4000/ws/match";
+const DEFAULT_API_BASE = "https://api.king11pro.live/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || DEFAULT_API_BASE;
+
+const WS_BASE = (() => {
+  const explicitWsBase = import.meta.env.VITE_WS_BASE_URL?.trim();
+  if (explicitWsBase) return explicitWsBase.replace(/\/$/, "");
+
+  try {
+    const apiUrl = new URL(API_BASE_URL);
+    apiUrl.protocol = apiUrl.protocol === "https:" ? "wss:" : "ws:";
+    apiUrl.pathname = "/ws/match";
+    apiUrl.search = "";
+    apiUrl.hash = "";
+    return apiUrl.toString().replace(/\/$/, "");
+  } catch {
+    return "ws://localhost:4000/ws/match";
+  }
+})();
 
 export function useMatchWebSocket(matchId: string | null): WsState {
   const token = useAuthStore((s) => s.token);

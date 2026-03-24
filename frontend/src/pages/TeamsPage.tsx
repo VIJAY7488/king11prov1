@@ -21,6 +21,7 @@ export function TeamsPage() {
 
   const [teams,   setTeams]   = useState<TeamFromApi[]>([]);
   const [matches, setMatches] = useState<MatchFromApi[]>([]);
+  const [liveMatchId, setLiveMatchId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [createModal, setCreateModal] = useState(false);
@@ -32,8 +33,7 @@ export function TeamsPage() {
   const [deletingTeamId, setDeletingTeamId] = useState<string | null>(null);
   const [joinedTeamIds, setJoinedTeamIds] = useState<Set<string>>(new Set());
 
-  // WebSocket for the most recently selected live match
-  const liveMatchId = matches.find((m) => m.status === "LIVE")?.id ?? null;
+  // WebSocket should track a live match from the full backend list, not the filtered UPCOMING list.
   const { pointsMap, connected } = useMatchWebSocket(liveMatchId);
 
   async function loadData() {
@@ -56,6 +56,8 @@ export function TeamsPage() {
       }
       setJoinedTeamIds(ids);
       const allMatchesRaw: MatchFromApi[] = matchesRes.data?.data?.matches ?? [];
+      const liveMatch = allMatchesRaw.find((m) => m.status === "LIVE");
+      setLiveMatchId(liveMatch?.id ?? liveMatch?._id ?? null);
       if (urlContestId && urlMatchId) {
         const currentMatch = allMatchesRaw.find((m) => (m.id ?? m._id) === urlMatchId);
         setJoinLockedByMatch(!!currentMatch && currentMatch.status !== "UPCOMING");
