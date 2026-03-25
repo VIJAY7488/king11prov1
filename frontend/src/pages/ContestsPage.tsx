@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useState, useCallback } from "react";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
 import { trackEvent } from "@/lib/analytics";
@@ -9,9 +9,15 @@ import { ContestCard, type Contest } from "@/components/contest/ContestCard";
 
 export function ContestsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlMatchId = searchParams.get("matchId");
   const urlTeamId = searchParams.get("teamId");
+
+
+  const [persistedMatchId] = useState(
+    () => sessionStorage.getItem("selectedMatchId") ?? null
+  );
 
   const { toast, refreshWallet, setWalletBalance } = useApp();
   const token = useAuthStore((s) => s.token);
@@ -21,23 +27,30 @@ export function ContestsPage() {
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
-        const query = urlMatchId ? `?matchId=${urlMatchId}&limit=50` : `?limit=50`;
-        const res = await api.get(`/contests${query}`);
-        const all: Contest[] = res.data?.data?.contests ?? [];
-        setContests(all);
-      } catch (err) {
-        const msg = getErrorMessage(err, "Failed to load contests");
-        setError(msg);
-        toast({ type: "error", icon: "❌", msg });
-      } finally {
-        setLoading(false);
-      }
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const query = urlMatchId ? `?matchId=${urlMatchId}&limit=50` : `?limit=50`;
+      const res = await api.get(`/contests${query}`);
+      const all: Contest[] = res.data?.data?.contests ?? [];
+      setContests(all);
+    } catch (err) {
+      const msg = getErrorMessage(err, "Failed to load contests");
+      setError(msg);
+      toast({ type: "error", icon: "❌", msg });
+    } finally {
+      setLoading(false);
     }
-    load();
+  }, [urlMatchId, toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (urlMatchId) {
+      sessionStorage.setItem("selectedMatchId", urlMatchId);
+    }
   }, [urlMatchId]);
 
   async function handleJoin(c: Contest) {
@@ -67,10 +80,8 @@ export function ContestsPage() {
       return;
     }
 
-    // If they came from the "My Teams" page by clicking "Join Contest", 
-    // we already have their team context, so join immediately!
     if (urlTeamId) {
-      if (joining) return; // prevent double-submit
+      if (joining) return;
       setJoining(true);
       try {
         const res = await api.post("/users/join-contest", { contestId: c.id, teamId: urlTeamId });
@@ -93,25 +104,35 @@ export function ContestsPage() {
       return;
     }
 
-    // Otherwise, they need to pick/create a team first
     navigate(`/teams?matchId=${c.matchId}&contestId=${c.id}`);
-  };
+  }
+
+  const contestTargetMatchId = urlMatchId ?? persistedMatchId;
+  const contestTabTo = contestTargetMatchId ? `/contests?matchId=${contestTargetMatchId}` : "/contests";
 
   const mobileTabs = [
-    { label: "Contests", icon: "🏆", to: "/contests" },
+    { label: "Contests", icon: "🏆", to: contestTabTo, requireAuth: false },
     { label: "My Contests", icon: "🎯", to: "/joined-contests", requireAuth: true },
     { label: "Teams", icon: "👕", to: "/teams", requireAuth: true },
-    { label: "Stats", icon: "📊", to: "/matches" },
+    { label: "Stats", icon: "📊", to: "/matches", requireAuth: false },
   ];
 
   return (
-    <div className="max-w-[1280px] mx-auto px-4 sm:px-6 pt-6 pb-24 md:pb-8">
-      {/* ── Desktop header ── */}
+    //dynamic safe-area bottom padding
+    <div
+      className="max-w-[1280px] mx-auto px-4 sm:px-6 pt-6 md:pb-8"
+      style={{ paddingBottom: "calc(4rem + max(env(safe-area-inset-bottom), 0.35rem))" }}
+    >
+      {/* Desktop header */}
       <div className="hidden md:flex items-center justify-between mb-6">
         <h1 className="font-display font-black text-3xl">🏆 Contests</h1>
         {urlMatchId && (
           <button
-            onClick={() => { searchParams.delete("matchId"); setSearchParams(searchParams); }}
+            onClick={() => {
+              searchParams.delete("matchId");
+              setSearchParams(searchParams);
+              sessionStorage.removeItem("selectedMatchId");
+            }}
             className="text-sm font-bold text-[#EA4800] hover:underline"
           >
             Clear Filter ✕
@@ -119,11 +140,11 @@ export function ContestsPage() {
         )}
       </div>
 
-      {/* ── Mobile tab strip ── */}
+      {/* Mobile tab strip */}
       <div className="md:hidden mb-5">
         <div className="grid grid-cols-4 gap-2">
           {mobileTabs.map((tab) => {
-            const isActive = location.pathname === tab.to;
+            const isActive = location.pathname === tab.to; // FIX #1 — now reactive
             return (
               <button
                 key={tab.label}
@@ -136,8 +157,8 @@ export function ContestsPage() {
                   navigate(tab.to);
                 }}
                 className={`flex flex-col items-center gap-1 py-2.5 px-1 rounded-2xl border-[1.5px] transition-all ${isActive
-                  ? "bg-[#EA4800] border-[#EA4800] text-white shadow-[0_4px_14px_rgba(234,72,0,.30)]"
-                  : "bg-white border-[#E8E0D4] text-[#7A6A55] hover:border-[#EA4800] hover:text-[#EA4800]"
+                    ? "bg-[#EA4800] border-[#EA4800] text-white shadow-[0_4px_14px_rgba(234,72,0,.30)]"
+                    : "bg-white border-[#E8E0D4] text-[#7A6A55] hover:border-[#EA4800] hover:text-[#EA4800]"
                   }`}
               >
                 <span className="text-lg leading-none">{tab.icon}</span>
@@ -148,10 +169,12 @@ export function ContestsPage() {
         </div>
       </div>
 
-      {/* ── Content ── */}
+      {/* Content */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="h-64 bg-[#F4F1EC] animate-pulse rounded-3xl" />)}
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="h-64 bg-[#F4F1EC] animate-pulse rounded-3xl" />
+          ))}
         </div>
       ) : error ? (
         <div className="bg-red-50 text-red-600 p-4 rounded-xl font-bold text-center">{error}</div>

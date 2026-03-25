@@ -187,7 +187,9 @@ const Homepage = () => {
       return;
     }
     // Navigate to Contests flow for this Match
-    navigate(`/contests?matchId=${matchId(m)}`);
+    const selectedMatchId = matchId(m);
+    if (selectedMatchId) sessionStorage.setItem("selectedMatchId", selectedMatchId);
+    navigate(`/contests?matchId=${selectedMatchId}`);
   }
 
   function handleJoinContest(c: Contest) {
