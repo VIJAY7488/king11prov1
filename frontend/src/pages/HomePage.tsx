@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
@@ -35,7 +35,7 @@ const Homepage = () => {
   const token = useAuthStore((s) => s.token);
   const navigate = useNavigate();
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
       setError(null);
       let hasData = false;
@@ -105,9 +105,10 @@ const Homepage = () => {
     } finally {
       setLoading(false);
     }
-  }
+  }, [token]);
 
   useEffect(() => { loadData(); }, [token]);
+
   useEffect(() => {
     if (!token) return;
     const id = setInterval(() => {
@@ -115,6 +116,7 @@ const Homepage = () => {
     }, 4200);
     return () => clearInterval(id);
   }, [token]);
+
   // Helper functions
   const matchId = (m: MatchFromApi) => m.id ?? m._id ?? "";
   const matchDateObj = (m: MatchFromApi) => {
@@ -411,7 +413,7 @@ const Homepage = () => {
               )}
 
               {/* ── MOBILE card layout ── */}
-              <div className="md:hidden p-3">
+              <div className="md:hidden p-3" onClick={() => handleJoinMatch(m)}>
                 {/* Top row: format badge + status badge */}
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[0.6rem] font-black tracking-wider uppercase bg-[#F4F1EC] px-2 py-0.5 rounded text-[#7A6A55]">
