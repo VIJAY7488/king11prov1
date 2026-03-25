@@ -459,137 +459,138 @@ const Homepage = () => {
                         {m.team2Name}
                       </p>
                     </div>
-
-                    {/* Right column: date/time + countdown only */}
-                    <div className="flex flex-col items-end gap-2 shrink-0">
-                      {m.status === "LIVE" ? (
-                        <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
-                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
-                          <span className="text-[0.7rem] font-black text-red-600 whitespace-nowrap">Live Now</span>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-end bg-[#FFF0E7] border border-[#FFD4BE] rounded-xl px-3 py-2.5 gap-1">
-                          <span className="text-[0.65rem] font-black text-[#1A1208] whitespace-nowrap">
-                            {matchDateLabel(m)}
-                          </span>
-                          <span className="text-[0.7rem] font-bold text-[#EA4800] whitespace-nowrap">
-                            ⏰ {matchTime(m)}
-                          </span>
-                          <span className="text-[0.75rem] font-black text-[#B3470F] whitespace-nowrap tabular-nums">
-                            🚀 {matchStartsIn(m)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
                   </div>
+
+                  {/* Right column: date/time + countdown only */}
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    {m.status === "LIVE" ? (
+                      <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                        <span className="text-[0.7rem] font-black text-red-600 whitespace-nowrap">Live Now</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-end bg-[#FFF0E7] border border-[#FFD4BE] rounded-xl px-3 py-2.5 gap-1">
+                        <span className="text-[0.65rem] font-black text-[#1A1208] whitespace-nowrap">
+                          {matchDateLabel(m)}
+                        </span>
+                        <span className="text-[0.7rem] font-bold text-[#EA4800] whitespace-nowrap">
+                          ⏰ {matchTime(m)}
+                        </span>
+                        <span className="text-[0.75rem] font-black text-[#B3470F] whitespace-nowrap tabular-nums">
+                          🚀 {matchStartsIn(m)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
                 </div>
               </div>
 
               {/* ── DESKTOP card layout (original) ── */}
               <div className="hidden md:block p-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-[0.65rem] font-black tracking-wider uppercase bg-[#F4F1EC] px-2 py-0.5 rounded text-[#7A6A55]">
-                      {m.format ?? "CRICKET"}
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-[0.65rem] font-black tracking-wider uppercase bg-[#F4F1EC] px-2 py-0.5 rounded text-[#7A6A55]">
+                    {m.format ?? "CRICKET"}
+                  </span>
+                  {m.status === "LIVE" && (
+                    <span className="text-[0.65rem] font-black tracking-wider uppercase bg-red-100 text-red-600 px-2 py-0.5 rounded border border-red-200 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" /> LIVE
                     </span>
-                    {m.status === "LIVE" && (
-                      <span className="text-[0.65rem] font-black tracking-wider uppercase bg-red-100 text-red-600 px-2 py-0.5 rounded border border-red-200 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" /> LIVE
-                      </span>
-                    )}
-                    {m.status === "UPCOMING" && (
-                      <span className="text-[0.6rem] font-black tracking-wider uppercase text-[#EA4800] bg-[#FFF0E7] border border-[#FFD4BE] px-2 py-1 rounded-lg">
-                        ⏰ {matchDateLabel(m)} · {matchTime(m)}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-[#F4F1EC] border border-[#E8E0D4] text-[#3D3020] text-sm font-extrabold tracking-wide flex items-center justify-center shrink-0">
-                        {(m.team1Name ?? "T1").slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="font-display font-black text-xl truncate">{m.team1Name}</div>
-                    </div>
-                    <div className="text-[#B0A090] font-black text-sm px-2">VS</div>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="font-display font-black text-xl truncate text-right">{m.team2Name}</div>
-                      <div className="w-8 h-8 rounded-full bg-[#F4F1EC] border border-[#E8E0D4] text-[#3D3020] text-sm font-extrabold tracking-wide flex items-center justify-center shrink-0">
-                        {(m.team2Name ?? "T2").slice(0, 2).toUpperCase()}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="h-px bg-[#E8E0D4] my-3" />
-
-                  {m.status === "UPCOMING" && (
-                    <>
-                      <div className="mb-2 rounded-lg bg-[#FFF0E7] border border-[#FFD9C3] px-3 py-2 flex items-center justify-between">
-                        <span className="text-[0.68rem] font-black uppercase tracking-wider text-[#B3470F]">Match Date</span>
-                        <span className="text-xs font-bold text-[#1A1208]">{matchDateLabel(m)}, {matchTime(m)}</span>
-                      </div>
-                      <div className="mb-3 rounded-lg bg-gradient-to-r from-[#EA4800] to-[#FF6B2B] px-3 py-2 flex items-center justify-between shadow-[0_8px_22px_rgba(234,72,0,.24)]">
-                        <span className="text-[0.68rem] font-black uppercase tracking-wider text-white/85">Kickoff In</span>
-                        <span className="text-xs font-black text-white">🚀 {matchStartsIn(m)}</span>
-                      </div>
-                    </>
                   )}
+                  {m.status === "UPCOMING" && (
+                    <span className="text-[0.6rem] font-black tracking-wider uppercase text-[#EA4800] bg-[#FFF0E7] border border-[#FFD4BE] px-2 py-1 rounded-lg">
+                      ⏰ {matchDateLabel(m)} · {matchTime(m)}
+                    </span>
+                  )}
+                </div>
 
-                  <div className="flex justify-between items-center">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleJoinMatch(m); }}
-                      className="bg-gradient-to-br from-[#EA4800] to-[#FF5A1A] text-white px-4 py-1.5 rounded-xl font-bold text-sm shadow-[0_4px_12px_rgba(234,72,0,0.3)] hover:scale-105 active:scale-95 transition-all"
-                    >
-                      Join Contests →
-                    </button>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-[#F4F1EC] border border-[#E8E0D4] text-[#3D3020] text-sm font-extrabold tracking-wide flex items-center justify-center shrink-0">
+                      {(m.team1Name ?? "T1").slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="font-display font-black text-xl truncate">{m.team1Name}</div>
+                  </div>
+                  <div className="text-[#B0A090] font-black text-sm px-2">VS</div>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="font-display font-black text-xl truncate text-right">{m.team2Name}</div>
+                    <div className="w-8 h-8 rounded-full bg-[#F4F1EC] border border-[#E8E0D4] text-[#3D3020] text-sm font-extrabold tracking-wide flex items-center justify-center shrink-0">
+                      {(m.team2Name ?? "T2").slice(0, 2).toUpperCase()}
+                    </div>
                   </div>
                 </div>
+
+                <div className="h-px bg-[#E8E0D4] my-3" />
+
+                {m.status === "UPCOMING" && (
+                  <>
+                    <div className="mb-2 rounded-lg bg-[#FFF0E7] border border-[#FFD9C3] px-3 py-2 flex items-center justify-between">
+                      <span className="text-[0.68rem] font-black uppercase tracking-wider text-[#B3470F]">Match Date</span>
+                      <span className="text-xs font-bold text-[#1A1208]">{matchDateLabel(m)}, {matchTime(m)}</span>
+                    </div>
+                    <div className="mb-3 rounded-lg bg-gradient-to-r from-[#EA4800] to-[#FF6B2B] px-3 py-2 flex items-center justify-between shadow-[0_8px_22px_rgba(234,72,0,.24)]">
+                      <span className="text-[0.68rem] font-black uppercase tracking-wider text-white/85">Kickoff In</span>
+                      <span className="text-xs font-black text-white">🚀 {matchStartsIn(m)}</span>
+                    </div>
+                  </>
+                )}
+
+                <div className="flex justify-between items-center">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleJoinMatch(m); }}
+                    className="bg-gradient-to-br from-[#EA4800] to-[#FF5A1A] text-white px-4 py-1.5 rounded-xl font-bold text-sm shadow-[0_4px_12px_rgba(234,72,0,0.3)] hover:scale-105 active:scale-95 transition-all"
+                  >
+                    Join Contests →
+                  </button>
+                </div>
+              </div>
             </div>
           ))}
-                {filteredMatches.length === 0 && (
-                  <div className="col-span-full text-center py-12 bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl text-[#7A6A55]">
-                    <p className="text-4xl mb-2">🏟️</p>
-                    <p className="font-bold text-[#3D3020]">
-                      {matchFilter === "starting-soon"
-                        ? "No matches starting right now"
-                        : "No matches available right now"}
-                    </p>
-                    {matchFilter === "starting-soon" && matches.length > 0 && (
-                      <button
-                        onClick={() => setMatchFilter("recommended")}
-                        className="mt-3 text-sm font-bold text-[#EA4800] hover:text-[#FF5A1A]"
-                      >
-                        View all matches →
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </section>
-
-      {/* ── Contests ── */ }
-      <section>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display font-bold text-lg flex items-center gap-2">
-                🏆 Hot Contests
-                <span className="text-sm font-normal text-[#7A6A55]">({contests.length})</span>
-              </h2>
-              <button onClick={() => navigate("/contests")} className="text-sm font-bold text-[#EA4800] hover:text-[#FF5A1A]">See All →</button>
+          {filteredMatches.length === 0 && (
+            <div className="col-span-full text-center py-12 bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl text-[#7A6A55]">
+              <p className="text-4xl mb-2">🏟️</p>
+              <p className="font-bold text-[#3D3020]">
+                {matchFilter === "starting-soon"
+                  ? "No matches starting right now"
+                  : "No matches available right now"}
+              </p>
+              {matchFilter === "starting-soon" && matches.length > 0 && (
+                <button
+                  onClick={() => setMatchFilter("recommended")}
+                  className="mt-3 text-sm font-bold text-[#EA4800] hover:text-[#FF5A1A]"
+                >
+                  View all matches →
+                </button>
+              )}
             </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── Contests ── */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display font-bold text-lg flex items-center gap-2">
+            🏆 Hot Contests
+            <span className="text-sm font-normal text-[#7A6A55]">({contests.length})</span>
+          </h2>
+          <button onClick={() => navigate("/contests")} className="text-sm font-bold text-[#EA4800] hover:text-[#FF5A1A]">See All →</button>
+        </div>
 
         {
-              contests.length === 0 ? (
-                <div className="text-center py-10 bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl text-[#7A6A55]">
-                  <p className="text-3xl mb-2">🏆</p>
-                  <p className="font-bold text-[#3D3020]">No active contests right now</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {contests.map((c) => (
-                    <ContestCard key={c.id} contest={c} onJoin={handleJoinContest} />
-                  ))}
-                </div>
-              )
-            }
+          contests.length === 0 ? (
+            <div className="text-center py-10 bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl text-[#7A6A55]">
+              <p className="text-3xl mb-2">🏆</p>
+              <p className="font-bold text-[#3D3020]">No active contests right now</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {contests.map((c) => (
+                <ContestCard key={c.id} contest={c} onJoin={handleJoinContest} />
+              ))}
+            </div>
+          )
+        }
       </section>
 
       <Modal
