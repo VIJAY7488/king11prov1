@@ -95,17 +95,17 @@ const withTransaction = async <T>(fn: (session: ClientSession) => Promise<T>): P
     await session.abortTransaction();
     throw err;
   } finally {
-    session.endSession();
+    await session.endSession().catch(() => { });
   }
 };
 
 // ── Status Transition Table ───────────────────────────────────────────────────
 
 const ALLOWED_TRANSITIONS: Record<ContestStatus, ContestStatus[]> = {
-  [ContestStatus.DRAFT]:     [ContestStatus.OPEN, ContestStatus.CANCELLED],
-  [ContestStatus.OPEN]:      [ContestStatus.CLOSED, ContestStatus.CANCELLED, ContestStatus.DRAFT],
-  [ContestStatus.FULL]:      [ContestStatus.CLOSED, ContestStatus.CANCELLED],
-  [ContestStatus.CLOSED]:    [ContestStatus.COMPLETED, ContestStatus.CANCELLED],
+  [ContestStatus.DRAFT]: [ContestStatus.OPEN, ContestStatus.CANCELLED],
+  [ContestStatus.OPEN]: [ContestStatus.CLOSED, ContestStatus.CANCELLED, ContestStatus.DRAFT],
+  [ContestStatus.FULL]: [ContestStatus.CLOSED, ContestStatus.CANCELLED],
+  [ContestStatus.CLOSED]: [ContestStatus.COMPLETED, ContestStatus.CANCELLED],
   [ContestStatus.COMPLETED]: [],
   [ContestStatus.CANCELLED]: [],
 };
@@ -182,7 +182,7 @@ export class ContestService {
       }
     }
 
-    const rankPrizes = rankPrizesCents.map((c) => round2(c / 100));
+    const rankPrizes = rankPrizesCents.slice(0, totalWinners).map((c) => round2(c / 100));
 
     // Collapse contiguous same-prize ranks into table rows.
     const distribution: PrizeDistributionResult["distribution"] = [];
@@ -510,10 +510,10 @@ export class ContestService {
    * Default status is DRAFT — admin must explicitly set OPEN to make it visible.
    */
   async createContest(dto: CreateContestDTO): Promise<ContestPublic> {
-    if(dto.contestType === ContestType.FREE_LEAGUE && dto.entryFee !== 0) {
+    if (dto.contestType === ContestType.FREE_LEAGUE && dto.entryFee !== 0) {
       throw new AppError('FREE_LEAGUE contest must have entryFee = 0.', 422);
     }
-    if(dto.contestType !== ContestType.FREE_LEAGUE && dto.entryFee <= 0){
+    if (dto.contestType !== ContestType.FREE_LEAGUE && dto.entryFee <= 0) {
       throw new AppError('Paid contests must have entryFee greater than 0.', 422);
     }
 
@@ -576,15 +576,15 @@ export class ContestService {
     const contest = await Contest.findById(contestId);
     if (!contest) throw new AppError('Contest not found.', 404);
 
-    if ( contest.status === ContestStatus.COMPLETED || contest.status === ContestStatus.CANCELLED ) {
-      throw new AppError(`Contest is ${contest.status.toLowerCase()} and cannot be modified.`,409);
+    if (contest.status === ContestStatus.COMPLETED || contest.status === ContestStatus.CANCELLED) {
+      throw new AppError(`Contest is ${contest.status.toLowerCase()} and cannot be modified.`, 409);
     };
 
     // Status transition validation
-    if (dto.status && dto.status !== contest.status){
+    if (dto.status && dto.status !== contest.status) {
       const allowed = ALLOWED_TRANSITIONS[contest.status];
       if (!allowed.includes(dto.status)) {
-        throw new AppError(`Cannot move from ${contest.status} → ${dto.status}. ` +`Allowed: ${allowed.join(', ') || 'none'}.`, 422);
+        throw new AppError(`Cannot move from ${contest.status} → ${dto.status}. ` + `Allowed: ${allowed.join(', ') || 'none'}.`, 422);
       }
     }
 
@@ -594,9 +594,11 @@ export class ContestService {
       const { default: scoreService } = await import('../scores/score.service');
       await scoreService.confirmMatchScores(String(contest.matchId));
 
-      const refreshed = await Contest.findById(contestId);
-      if (!refreshed) throw new AppError('Contest not found after completion.', 404);
-      return toContestPublic(refreshed);
+      contest.status = ContestStatus.COMPLETED;
+      contest.completedAt = dto.completedAt ?? new Date();
+      await contest.save();
+
+      return toContestPublic(contest);
     }
 
     // Cancelling a contest must atomically refund all paid entries.
@@ -641,8 +643,8 @@ export class ContestService {
       });
     }
 
-    if(dto.entryFee !== undefined) {
-      if(contest.contestType === ContestType.FREE_LEAGUE && dto.entryFee !== 0) {
+    if (dto.entryFee !== undefined) {
+      if (contest.contestType === ContestType.FREE_LEAGUE && dto.entryFee !== 0) {
         throw new AppError('FREE_LEAGUE contest must keep entryFee = 0.', 422);
       }
       if (contest.contestType !== ContestType.FREE_LEAGUE && dto.entryFee <= 0) {
@@ -656,20 +658,20 @@ export class ContestService {
 
     // Build the update — pre-save hook recalculates financials if needed
     const updateFields: Partial<IContest> = {};
-    if (dto.name              !== undefined) updateFields.name              = dto.name;
-    if (dto.description       !== undefined) updateFields.description       = dto.description;
-    if (dto.entryFee          !== undefined) updateFields.entryFee          = dto.entryFee;
-    if (dto.prizePool         !== undefined) updateFields.prizePool         = dto.prizePool;
+    if (dto.name !== undefined) updateFields.name = dto.name;
+    if (dto.description !== undefined) updateFields.description = dto.description;
+    if (dto.entryFee !== undefined) updateFields.entryFee = dto.entryFee;
+    if (dto.prizePool !== undefined) updateFields.prizePool = dto.prizePool;
     if (contest.contestType !== ContestType.HEAD_TO_HEAD && dto.maxEntriesPerUser !== undefined) {
       updateFields.maxEntriesPerUser = dto.maxEntriesPerUser;
     }
-    if (dto.isGuaranteed      !== undefined) updateFields.isGuaranteed      = dto.isGuaranteed;
-    if (dto.status            !== undefined) updateFields.status            = dto.status;
-    if (dto.closedAt          !== undefined) updateFields.closedAt          = dto.closedAt;
-    if (dto.completedAt       !== undefined) updateFields.completedAt       = dto.completedAt;
+    if (dto.isGuaranteed !== undefined) updateFields.isGuaranteed = dto.isGuaranteed;
+    if (dto.status !== undefined) updateFields.status = dto.status;
+    if (dto.closedAt !== undefined) updateFields.closedAt = dto.closedAt;
+    if (dto.completedAt !== undefined) updateFields.completedAt = dto.completedAt;
 
     // Auto-stamp lifecycle timestamps on status change
-    if (dto.status === ContestStatus.CLOSED    && !dto.closedAt)    updateFields.closedAt    = new Date();
+    if (dto.status === ContestStatus.CLOSED && !dto.closedAt) updateFields.closedAt = new Date();
 
     if (Object.keys(updateFields).length === 0) {
       throw new AppError('No valid update fields provided.', 400);
@@ -686,15 +688,15 @@ export class ContestService {
   // ── User: List Contests ────────────────────────────────────────────────────
 
   async listContests(params: ContestQueryParams): Promise<PaginatedContests> {
-    const page  = Math.max(1, params.page  ?? 1);
+    const page = Math.max(1, params.page ?? 1);
     const limit = Math.min(50, Math.max(1, params.limit ?? 20));
-    const skip  = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
     const filter: Record<string, unknown> = {
       status: { $nin: [ContestStatus.DRAFT, ContestStatus.CANCELLED] },
     };
-    if (params.matchId)     filter['matchId']     = params.matchId;
-    if (params.status)      filter['status']      = params.status;
+    if (params.matchId) filter['matchId'] = params.matchId;
+    if (params.status) filter['status'] = params.status;
     if (params.contestType) filter['contestType'] = params.contestType;
 
     const [contests, total] = await Promise.all([
@@ -710,7 +712,7 @@ export class ContestService {
     // Fetch matches for these contests
     const matchIds = [...new Set((contests as ContestDocLike[]).map((c) => c.matchId))];
     const validMatchIds = matchIds.filter((id) => Types.ObjectId.isValid(id));
-    
+
     const { Match } = await import('../match/match.model');
     const matches = await Match.find({ _id: { $in: validMatchIds } })
       .select(MATCH_LISTING_PROJECTION)
@@ -726,20 +728,22 @@ export class ContestService {
       return c;
     });
 
-    return { contests: populatedContests.map((c) => toContestPublic(c as ContestDocLike)), total, page, limit,
-             totalPages: Math.ceil(total / limit) };
+    return {
+      contests: populatedContests.map((c) => toContestPublic(c as ContestDocLike)), total, page, limit,
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
   // ── ADMIN: List All Contests (includes DRAFT + CANCELLED) ─────────────────
   async adminListContests(params: ContestQueryParams): Promise<PaginatedContests> {
-    const page  = Math.max(1, params.page  ?? 1);
+    const page = Math.max(1, params.page ?? 1);
     const limit = Math.min(200, Math.max(1, params.limit ?? 50));
-    const skip  = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
     // No status exclusion — admin sees everything
     const filter: Record<string, unknown> = {};
-    if (params.matchId)     filter['matchId']     = params.matchId;
-    if (params.status)      filter['status']      = params.status;
+    if (params.matchId) filter['matchId'] = params.matchId;
+    if (params.status) filter['status'] = params.status;
     if (params.contestType) filter['contestType'] = params.contestType;
 
     const [contests, total] = await Promise.all([
@@ -761,16 +765,18 @@ export class ContestService {
       .lean();
     const matchMap = new Map(matches.map((m: any) => [m._id.toString(), m]));
 
-    const populatedContests = (contests as ContestDocLike[]).map((c: any) => {
-      const matchDoc = matchMap.get(c.matchId);
-      if (matchDoc) {
-        c.match = { ...matchDoc, id: matchDoc._id.toString() };
-      }
-      return c;
+    const populatedContests = (contests as ContestDocLike[]).map((c) => {
+      const matchDoc = matchMap.get(c.matchId?.toString());
+      return {
+        ...c,
+        match: matchDoc ? { ...matchDoc, id: matchDoc._id.toString() } : undefined,
+      } as ContestDocLike;
     });
 
-    return { contests: populatedContests.map((c) => toContestPublic(c as ContestDocLike)), total, page, limit,
-             totalPages: Math.ceil(total / limit) };
+    return {
+      contests: populatedContests.map((c) => toContestPublic(c as ContestDocLike)), total, page, limit,
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
 
@@ -921,8 +927,6 @@ export class ContestService {
       if (!contest) throw new AppError('Contest not found.', 404);
       if (contest.status !== ContestStatus.OPEN)
         throw new AppError('Contest is not open for joining.', 409);
-      if (contest.filledSpots >= contest.totalSpots)
-        throw new AppError('Contest is full.', 409);
 
       const { Match } = await import('../match/match.model');
       const match = await Match.findById(contest.matchId).session(session);
@@ -935,8 +939,8 @@ export class ContestService {
       if (!team) throw new AppError('Team not found.', 404);
       if (team.userId.toString() !== userId)
         throw new AppError('Team does not belong to you.', 403);
-      if (team.contestId.toString() !== contestId)
-        throw new AppError('This team belongs to a different contest.', 409);
+      if (team.matchId.toString() !== contest.matchId.toString())
+        throw new AppError('This team is for a different match.', 409);
 
 
       const [existingTeamEntry, userEntryCount] = await Promise.all([
@@ -963,7 +967,7 @@ export class ContestService {
       }
 
       let newBalance: number | undefined = undefined;
-      if(contest.contestType !== ContestType.FREE_LEAGUE) {
+      if (contest.contestType !== ContestType.FREE_LEAGUE) {
         // Deduct entry fee using proper Wallet Service to create transaction logs
         const walletResult = await walletService.deductForContest(
           userId,
@@ -976,14 +980,21 @@ export class ContestService {
       }
 
 
-      // Increment filledSpots; flip to FULL if all spots taken
-      const newFilled = contest.filledSpots + 1;
-      const newStatus = newFilled >= contest.totalSpots
+      // Increment filledSpots; flip to FULL if all spots take
+      const updated = await Contest.findOneAndUpdate(
+        {
+          _id: contestId,
+          status: ContestStatus.OPEN,
+          $expr: { $lt: ['$filledSpots', '$totalSpots'] }, // atomic — only updates if space exists
+        },
+        { $inc: { filledSpots: 1 } },
+        { session, new: true }
+      );
+      if (!updated) throw new AppError('Contest is full or no longer open.', 409);
+
+      const newStatus = updated.filledSpots >= updated.totalSpots
         ? ContestStatus.FULL : ContestStatus.OPEN;
-      await Contest.findByIdAndUpdate(contestId, {
-        $inc: { filledSpots: 1 },
-        $set: { status: newStatus },
-      }, { session });
+      await Contest.findByIdAndUpdate(contestId, { $set: { status: newStatus } }, { session });
 
       // CREATE ContestEntry to track user participation for leaderboard
       await ContestEntry.create(
