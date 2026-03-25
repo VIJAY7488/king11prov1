@@ -35,7 +35,6 @@ export function JoinedContestsPage() {
   const [items, setItems] = useState<JoinedContestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<JoinedContestItem | null>(null);
-  const [silentError, setSilentError] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [playerPointsMap, setPlayerPointsMap] = useState<Map<string, number>>(new Map());
 
@@ -77,12 +76,7 @@ export function JoinedContestsPage() {
       const contests: JoinedContestItem[] = res.data?.data?.contests ?? [];
       setItems(contests);
       await loadLivePlayerPoints(contests);
-      if (silent) setSilentError(false); // clear error on success
     } catch (err) {
-      if (silent) {
-        setSilentError(true); // show subtle error indicator
-        return;
-      }
       toast({ type: "error", icon: "❌", msg: getErrorMessage(err, "Failed to load joined contests") });
     } finally {
       if (!silent) setLoading(false);
