@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
 import { useApp } from "@/context/AppContext";
 import type { MatchFromApi, TeamFromApi } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import { CreateTeamModal } from "@/components/createteam/CreateTeamModal";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuthStore } from "@/store/authStore";
 
 interface JoinedContestItem {
   entryId: string;
@@ -26,13 +28,19 @@ interface JoinedContestItem {
 
 export function JoinedContestsPage() {
   const { toast } = useApp();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const token = useAuthStore((s) => s.token);
+
   const [items, setItems] = useState<JoinedContestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<JoinedContestItem | null>(null);
+  const [silentError, setSilentError] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [playerPointsMap, setPlayerPointsMap] = useState<Map<string, number>>(new Map());
 
-  async function loadLivePlayerPoints(contests: JoinedContestItem[]) {
+
+  const loadLivePlayerPoints = useCallback(async (contests: JoinedContestItem[]) => {
     const matchIds = [
       ...new Set(
         contests
@@ -44,59 +52,104 @@ export function JoinedContestsPage() {
           .filter(Boolean)
       ),
     ] as string[];
-    if (!matchIds.length) {
-      setPlayerPointsMap(new Map());
-      return;
-    }
+
+    if (!matchIds.length) { setPlayerPointsMap(new Map()); return; }
 
     try {
-      const responses = await Promise.all(
-        matchIds.map((id) => api.get(`/scores/match/${id}`))
-      );
-
+      const responses = await Promise.all(matchIds.map((id) => api.get(`/scores/match/${id}`)));
       const next = new Map<string, number>();
       for (const res of responses) {
-        const team1 = res.data?.data?.team1 ?? [];
-        const team2 = res.data?.data?.team2 ?? [];
-        const all = [...team1, ...team2];
+        const all = [...(res.data?.data?.team1 ?? []), ...(res.data?.data?.team2 ?? [])];
         for (const p of all) {
           if (p?.playerId) next.set(p.playerId, Number(p.fantasyPoints ?? 0));
         }
       }
       setPlayerPointsMap(next);
     } catch {
-      // keep existing points map if score fetch fails
+      // keep existing map on failure
     }
-  }
+  }, []);
 
-  async function load(silent = false) {
+  const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
       const res = await api.get("/users/joined-contests");
       const contests: JoinedContestItem[] = res.data?.data?.contests ?? [];
       setItems(contests);
       await loadLivePlayerPoints(contests);
+      if (silent) setSilentError(false); // clear error on success
     } catch (err) {
-      if (!silent) toast({ type: "error", icon: "❌", msg: getErrorMessage(err, "Failed to load joined contests") });
+      if (silent) {
+        setSilentError(true); // show subtle error indicator
+        return;
+      }
+      toast({ type: "error", icon: "❌", msg: getErrorMessage(err, "Failed to load joined contests") });
     } finally {
       if (!silent) setLoading(false);
     }
-  }
+  }, [toast, loadLivePlayerPoints]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     const id = setInterval(() => load(true), 8000);
     return () => clearInterval(id);
-  }, []);
+  }, [load]);
 
   const sorted = useMemo(() => [...items].sort((a, b) => new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime()), [items]);
 
+  const mobileTabs = [
+    { label: "Contests", icon: "🏆", to: "/contests", requireAuth: false },
+    { label: "My Contests", icon: "🎯", to: "/joined-contests", requireAuth: true },
+    { label: "Teams", icon: "👕", to: "/teams", requireAuth: true },
+    { label: "Stats", icon: "📊", to: "/matches", requireAuth: false },
+  ];
+
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-6 pt-6 pb-24 md:pb-8">
-      <div className="flex items-center justify-between mb-6">
+      {/* Desktop header */}
+      <div className="hidden md:flex items-center justify-between mb-6">
         <h1 className="font-display font-black text-3xl">🎯 Joined Contests</h1>
         <Button variant="outline" onClick={() => load()}>Refresh</Button>
+      </div>
+
+      {/* Mobile tab strip */}
+      <div className="md:hidden mb-5">
+        <div className="grid grid-cols-4 gap-2">
+          {mobileTabs.map((tab) => {
+            const isActive = location.pathname === tab.to;
+            return (
+              <button
+                key={tab.label}
+                onClick={() => {
+                  if (tab.requireAuth && !token) {
+                    toast({ type: "info", icon: "🔒", msg: "Please login to continue" });
+                    navigate("/login");
+                    return;
+                  }
+                  navigate(tab.to);
+                }}
+                className={`flex flex-col items-center gap-1 py-2.5 px-1 rounded-2xl border-[1.5px] transition-all ${isActive
+                  ? "bg-[#EA4800] border-[#EA4800] text-white shadow-[0_4px_14px_rgba(234,72,0,.30)]"
+                  : "bg-white border-[#E8E0D4] text-[#7A6A55] hover:border-[#EA4800] hover:text-[#EA4800]"
+                  }`}
+              >
+                <span className="text-lg leading-none">{tab.icon}</span>
+                <span className="text-[0.65rem] font-extrabold leading-none whitespace-nowrap">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Mobile refresh button */}
+      <div className="md:hidden flex justify-end mb-4">
+        <button
+          onClick={() => load()}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-[1.5px] border-[#E8E0D4] text-xs font-bold text-[#7A6A55] hover:border-[#EA4800] hover:text-[#EA4800] transition-all"
+        >
+          🔄 Refresh
+        </button>
       </div>
 
       {loading ? (
@@ -114,7 +167,11 @@ export function JoinedContestsPage() {
           {sorted.map((item) => {
             const isEditable = item.match?.status === "UPCOMING" && !!item.match;
             return (
-              <div key={item.entryId} className="bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl overflow-hidden shadow-sm" style={{ borderTopWidth: 3, borderTopColor: "#EA4800" }}>
+              <div
+                key={item.entryId}
+                className="bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl overflow-hidden shadow-sm"
+                style={{ borderTopWidth: 3, borderTopColor: "#EA4800" }}
+              >
                 <div className="bg-[#F4F1EC] border-b-[1.5px] border-[#E8E0D4] px-5 py-3.5 flex items-center justify-between">
                   <div>
                     <p className="font-display font-black text-lg">{item.contest.name}</p>
