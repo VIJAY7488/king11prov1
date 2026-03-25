@@ -31,6 +31,10 @@ export function JoinedContestsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const token = useAuthStore((s) => s.token);
+  const persistedMatchId = sessionStorage.getItem("selectedMatchId");
+  const contestTabTo = persistedMatchId
+    ? `/contests?matchId=${encodeURIComponent(persistedMatchId)}`
+    : "/contests";
 
   const [items, setItems] = useState<JoinedContestItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +97,7 @@ export function JoinedContestsPage() {
   const sorted = useMemo(() => [...items].sort((a, b) => new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime()), [items]);
 
   const mobileTabs = [
-    { label: "Contests", icon: "🏆", to: "/contests", requireAuth: false },
+    { label: "Contests", icon: "🏆", to: contestTabTo, requireAuth: false },
     { label: "My Contests", icon: "🎯", to: "/joined-contests", requireAuth: true },
     { label: "Teams", icon: "👕", to: "/teams", requireAuth: true },
     { label: "Stats", icon: "📊", to: "/matches", requireAuth: false },
@@ -111,11 +115,14 @@ export function JoinedContestsPage() {
       <div className="md:hidden mb-5">
         <div className="grid grid-cols-4 gap-2">
           {mobileTabs.map((tab) => {
-            const isActive = location.pathname === tab.to;
+            const isActive = tab.label === "Contests"
+              ? location.pathname === "/contests"
+              : location.pathname === tab.to;
             return (
               <button
                 key={tab.label}
                 onClick={() => {
+                  if (isActive) return;
                   if (tab.requireAuth && !token) {
                     toast({ type: "info", icon: "🔒", msg: "Please login to continue" });
                     navigate("/login");

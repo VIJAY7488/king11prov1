@@ -21,6 +21,11 @@ export function TeamsPage() {
 
   const urlMatchId = searchParams.get("matchId");
   const urlContestId = searchParams.get("contestId");
+  const persistedMatchId = sessionStorage.getItem("selectedMatchId");
+  const selectedContestMatchId = urlMatchId ?? persistedMatchId;
+  const contestTabTo = selectedContestMatchId
+    ? `/contests?matchId=${encodeURIComponent(selectedContestMatchId)}`
+    : "/contests";
 
   const [teams, setTeams] = useState<TeamFromApi[]>([]);
   const [matches, setMatches] = useState<MatchFromApi[]>([]);
@@ -171,7 +176,7 @@ export function TeamsPage() {
   };
 
   const mobileTabs = [
-    { label: "Contests", icon: "🏆", to: "/contests", requireAuth: false },
+    { label: "Contests", icon: "🏆", to: contestTabTo, requireAuth: false },
     { label: "My Contests", icon: "🎯", to: "/joined-contests", requireAuth: true },
     { label: "Teams", icon: "👕", to: "/teams", requireAuth: true },
     { label: "Stats", icon: "📊", to: "/matches", requireAuth: false },
@@ -205,7 +210,7 @@ export function TeamsPage() {
           {urlContestId && (
             <Button
               variant="outline"
-              onClick={() => navigate(urlMatchId ? `/contests?matchId=${urlMatchId}` : "/contests")}
+              onClick={() => navigate(contestTabTo)}
             >
               ← Back to Contests
             </Button>
@@ -214,7 +219,7 @@ export function TeamsPage() {
             <Button onClick={openCreateForMatch}>+ Create New Team</Button>
           )}
           {!urlContestId && !urlMatchId && (
-            <Button onClick={() => navigate("/contests")}>+ Join Contest</Button>
+            <Button onClick={() => navigate(contestTabTo)}>+ Join Contest</Button>
           )}
         </div>
       </div>
@@ -223,11 +228,14 @@ export function TeamsPage() {
       <div className="md:hidden mb-5">
         <div className="grid grid-cols-4 gap-2">
           {mobileTabs.map((tab) => {
-            const isActive = location.pathname === tab.to;
+            const isActive = tab.label === "Contests"
+              ? location.pathname === "/contests"
+              : location.pathname === tab.to;
             return (
               <button
                 key={tab.label}
                 onClick={() => {
+                  if (isActive) return;
                   if (tab.requireAuth && !token) {
                     toast({ type: "info", icon: "🔒", msg: "Please login to continue" });
                     navigate("/login");
@@ -268,7 +276,7 @@ export function TeamsPage() {
           <div className="flex gap-2 shrink-0">
             {urlContestId && (
               <button
-                onClick={() => navigate(urlMatchId ? `/contests?matchId=${urlMatchId}` : "/contests")}
+                onClick={() => navigate(contestTabTo)}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-xl border-[1.5px] border-[#E8E0D4] text-xs font-bold text-[#7A6A55] hover:border-[#EA4800] hover:text-[#EA4800] transition-all"
               >
                 ← Contests

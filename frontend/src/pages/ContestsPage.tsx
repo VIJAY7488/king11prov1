@@ -13,11 +13,7 @@ export function ContestsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const urlMatchId = searchParams.get("matchId");
   const urlTeamId = searchParams.get("teamId");
-
-
-  const [persistedMatchId] = useState(
-    () => sessionStorage.getItem("selectedMatchId") ?? null
-  );
+  const persistedMatchId = sessionStorage.getItem("selectedMatchId");
 
   const { toast, refreshWallet, setWalletBalance } = useApp();
   const token = useAuthStore((s) => s.token);
@@ -108,7 +104,9 @@ export function ContestsPage() {
   }
 
   const contestTargetMatchId = urlMatchId ?? persistedMatchId;
-  const contestTabTo = contestTargetMatchId ? `/contests?matchId=${contestTargetMatchId}` : "/contests";
+  const contestTabTo = contestTargetMatchId
+    ? `/contests?matchId=${encodeURIComponent(contestTargetMatchId)}`
+    : "/contests";
 
   const mobileTabs = [
     { label: "Contests", icon: "🏆", to: contestTabTo, requireAuth: false },
@@ -144,11 +142,14 @@ export function ContestsPage() {
       <div className="md:hidden mb-5">
         <div className="grid grid-cols-4 gap-2">
           {mobileTabs.map((tab) => {
-            const isActive = location.pathname === tab.to; // FIX #1 — now reactive
+            const isActive = tab.label === "Contests"
+              ? location.pathname === "/contests"
+              : location.pathname === tab.to;
             return (
               <button
                 key={tab.label}
                 onClick={() => {
+                  if (isActive) return;
                   if (tab.requireAuth && !token) {
                     toast({ type: "info", icon: "🔒", msg: "Please login to continue" });
                     navigate("/login");
