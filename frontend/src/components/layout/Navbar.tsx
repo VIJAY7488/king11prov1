@@ -11,9 +11,9 @@ const Navbar = () => {
   const pathname = location.pathname;
 
 
-  const user    = useAuthStore((s) => s.user);
-  const logout  = useAuthStore((s) => s.logout);
-  const token   = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const token = useAuthStore((s) => s.token);
   const isAuthed = !!token;
 
   const { wallet, addMoney, toast } = useApp();
@@ -33,7 +33,7 @@ const Navbar = () => {
     });
   };
 
-  const mobileNavitems = [
+  const mobileNavItems = [
     {
       to: "/",
       icon: "🏠",
@@ -41,21 +41,9 @@ const Navbar = () => {
       isActive: pathname === "/",
     },
     {
-      to: "/contests",
-      icon: "🏆",
-      label: "Contests",
-      isActive: pathname === "/contests" || pathname.startsWith("/contests/"),
-    },
-    {
-      to: isAuthed ? "/teams" : "/login",
-      icon: "👕",
-      label: "Teams",
-      isActive: pathname === "/teams" || pathname.startsWith("/teams/"),
-    },
-    {
       to: "/matches",
-      icon: "📊",
-      label: "Scores",
+      icon: "🏏",
+      label: "My Matches",
       isActive: pathname === "/matches" || pathname.startsWith("/matches/"),
     },
     {
@@ -63,7 +51,7 @@ const Navbar = () => {
       icon: "👤",
       label: "Profile",
       isActive: pathname === "/profile" || pathname.startsWith("/profile/"),
-    }
+    },
   ];
 
   return (
@@ -81,7 +69,7 @@ const Navbar = () => {
 
           {/* Nav links */}
           <div className="hidden md:flex items-center gap-1 ml-6">
-            <Link to="/"        className="px-3 py-1.5 rounded-lg text-sm font-semibold text-[#7A6A55] hover:text-[#EA4800] hover:bg-[#FFF0EA] transition-all">🏠 Home</Link>
+            <Link to="/" className="px-3 py-1.5 rounded-lg text-sm font-semibold text-[#7A6A55] hover:text-[#EA4800] hover:bg-[#FFF0EA] transition-all">🏠 Home</Link>
             <Link to="/contests" className="px-3 py-1.5 rounded-lg text-sm font-semibold text-[#7A6A55] hover:text-[#EA4800] hover:bg-[#FFF0EA] transition-all">🏆 Contests</Link>
             {isAuthed && (
               <>
@@ -149,18 +137,41 @@ const Navbar = () => {
         </div>
       </nav>
 
-      <div className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t-[1.5px] border-[#E8E0D4] bg-white/95 backdrop-blur-xl shadow-[0_-8px_24px_rgba(26,18,8,0.08)]"
-        style={{paddingBottom: "max(env(safe-area-inset-bottom), 0.35rem)"}}>
-          <div className="mx-auto flex h-16 max-w-[560px] items-center justify-around px-2">
-            {mobileNavitems.map((item) => (
-              <Link key={item.label} to={item.to} className={`flex flex-1 min-w-0 flex-col items-center rounded-xl px-1 py-1 transition-all ${item.isActive ? "text-[#EA4800]" : "text-[#7A6A55]"}`}
-              >
-                <span className={`mb-0.5 flex h-7 w-10 items-center justify-center rounded-xl text-[1.15rem] ${item.isActive ? "bg-[#FFF0EA]" : ""}`}>{item.icon}</span>
-                <span className="text-[0.8rem] font-extrabold leading-none">{item.label}</span>
-              </Link>
-            ))}
+      {/* Mobile-only sticky Fantasy quick-action strip — home page only */}
+      {pathname === "/" && (
+        <div className="md:hidden sticky top-16 z-40 bg-white/95 backdrop-blur-xl border-b-[1.5px] border-[#E8E0D4] shadow-[0_4px_12px_rgba(26,18,8,0.06)]">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none px-3 py-2">
+            <Link
+              to="/fantasy"
+              className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-extrabold transition-all bg-[#FFF0EA] text-[#EA4800] border-[1.5px] border-[#EA4800]/30"
+            >
+              🏏 Fantasy
+            </Link>
           </div>
         </div>
+      )}
+
+      {/* ── Mobile bottom navigation ── */}
+      <div
+        className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t-[1.5px] border-[#E8E0D4] bg-white/95 backdrop-blur-xl shadow-[0_-8px_24px_rgba(26,18,8,0.08)]"
+        style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.35rem)" }}
+      >
+        <div className="mx-auto flex h-16 max-w-[560px] items-center justify-around px-2">
+          {mobileNavItems.map((item) => (
+            <Link
+              key={item.label}
+              to={item.to}
+              className={`flex flex-1 min-w-0 flex-col items-center rounded-xl px-1 py-1 transition-all ${item.isActive ? "text-[#EA4800]" : "text-[#7A6A55]"
+                }`}
+            >
+              <span className={`mb-0.5 flex h-7 w-10 items-center justify-center rounded-xl text-[1.15rem] ${item.isActive ? "bg-[#FFF0EA]" : ""}`}>
+                {item.icon}
+              </span>
+              <span className="text-[0.8rem] font-extrabold leading-none">{item.label}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
 
       <AddMoneyModal
         show={showAddMoney}
