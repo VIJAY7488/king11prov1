@@ -5,7 +5,7 @@ import { useApp } from "@/context/AppContext";
 import type { MatchFromApi, TeamFromApi } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import { CreateTeamModal } from "@/components/createteam/CreateTeamModal";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 
 interface JoinedContestItem {
@@ -30,11 +30,17 @@ export function JoinedContestsPage() {
   const { toast } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlMatchId = searchParams.get("matchId");
   const token = useAuthStore((s) => s.token);
   const persistedMatchId = sessionStorage.getItem("selectedMatchId");
-  const contestTabTo = persistedMatchId
-    ? `/contests?matchId=${encodeURIComponent(persistedMatchId)}`
+  const targetMatchId = urlMatchId ?? persistedMatchId;
+  const contestTabTo = targetMatchId
+    ? `/contests?matchId=${encodeURIComponent(targetMatchId)}`
     : "/contests";
+  const myContestsTabTo = targetMatchId
+    ? `/joined-contests?matchId=${encodeURIComponent(targetMatchId)}`
+    : "/joined-contests";
 
   const [items, setItems] = useState<JoinedContestItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,11 +100,22 @@ export function JoinedContestsPage() {
     return () => clearInterval(id);
   }, [load]);
 
-  const sorted = useMemo(() => [...items].sort((a, b) => new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime()), [items]);
+  useEffect(() => {
+    if (urlMatchId) sessionStorage.setItem("selectedMatchId", urlMatchId);
+  }, [urlMatchId]);
+
+  const sorted = useMemo(() => {
+    const ordered = [...items].sort((a, b) => new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime());
+    if (!targetMatchId) return ordered;
+    return ordered.filter((item) => {
+      const itemMatchId = item.match?.id ?? item.match?._id ?? item.team?.matchId ?? null;
+      return itemMatchId === targetMatchId;
+    });
+  }, [items, targetMatchId]);
 
   const mobileTabs = [
     { label: "Contests", icon: "🏆", to: contestTabTo, requireAuth: false },
-    { label: "My Contests", icon: "🎯", to: "/joined-contests", requireAuth: true },
+    { label: "My Contests", icon: "🎯", to: myContestsTabTo, requireAuth: true },
     { label: "Teams", icon: "👕", to: "/teams", requireAuth: true },
     { label: "Stats", icon: "📊", to: "/matches", requireAuth: false },
   ];
@@ -108,7 +125,20 @@ export function JoinedContestsPage() {
       {/* Desktop header */}
       <div className="hidden md:flex items-center justify-between mb-6">
         <h1 className="font-display font-black text-3xl">🎯 Joined Contests</h1>
-        <Button variant="outline" onClick={() => load()}>Refresh</Button>
+        <div className="flex items-center gap-2">
+          {urlMatchId && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                searchParams.delete("matchId");
+                setSearchParams(searchParams);
+              }}
+            >
+              Clear Filter
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => load()}>Refresh</Button>
+        </div>
       </div>
 
       {/* Mobile tab strip */}
@@ -117,6 +147,8 @@ export function JoinedContestsPage() {
           {mobileTabs.map((tab) => {
             const isActive = tab.label === "Contests"
               ? location.pathname === "/contests"
+              : tab.label === "My Contests"
+              ? location.pathname === "/joined-contests"
               : location.pathname === tab.to;
             return (
               <button
@@ -145,12 +177,25 @@ export function JoinedContestsPage() {
 
       {/* Mobile refresh button */}
       <div className="md:hidden flex justify-end mb-4">
-        <button
-          onClick={() => load()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-[1.5px] border-[#E8E0D4] text-xs font-bold text-[#7A6A55] hover:border-[#EA4800] hover:text-[#EA4800] transition-all"
-        >
-          🔄 Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {urlMatchId && (
+            <button
+              onClick={() => {
+                searchParams.delete("matchId");
+                setSearchParams(searchParams);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-[1.5px] border-[#E8E0D4] text-xs font-bold text-[#7A6A55] hover:border-[#EA4800] hover:text-[#EA4800] transition-all"
+            >
+              Clear Filter
+            </button>
+          )}
+          <button
+            onClick={() => load()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-[1.5px] border-[#E8E0D4] text-xs font-bold text-[#7A6A55] hover:border-[#EA4800] hover:text-[#EA4800] transition-all"
+          >
+            🔄 Refresh
+          </button>
+        </div>
       </div>
 
       {loading ? (
