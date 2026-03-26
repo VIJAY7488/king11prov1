@@ -41,6 +41,9 @@ export function JoinedContestsPage() {
   const myContestsTabTo = targetMatchId
     ? `/joined-contests?matchId=${encodeURIComponent(targetMatchId)}`
     : "/joined-contests";
+  const teamsTabTo = targetMatchId
+    ? `/teams?matchId=${encodeURIComponent(targetMatchId)}`
+    : "/teams";
 
   const [items, setItems] = useState<JoinedContestItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,7 +119,7 @@ export function JoinedContestsPage() {
   const mobileTabs = [
     { label: "Contests", icon: "🏆", to: contestTabTo, requireAuth: false },
     { label: "My Contests", icon: "🎯", to: myContestsTabTo, requireAuth: true },
-    { label: "Teams", icon: "👕", to: "/teams", requireAuth: true },
+    { label: "Teams", icon: "👕", to: teamsTabTo, requireAuth: true },
     { label: "Stats", icon: "📊", to: "/matches", requireAuth: false },
   ];
 
@@ -149,6 +152,8 @@ export function JoinedContestsPage() {
               ? location.pathname === "/contests"
               : tab.label === "My Contests"
               ? location.pathname === "/joined-contests"
+              : tab.label === "Teams"
+              ? location.pathname === "/teams"
               : location.pathname === tab.to;
             return (
               <button
