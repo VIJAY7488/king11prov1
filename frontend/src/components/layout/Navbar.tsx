@@ -56,7 +56,7 @@ const Navbar = () => {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b-[1.5px] border-[#E8E0D4]">
+      <nav className="sticky top-0 z-50 bg-white md:bg-white/90 md:backdrop-blur-xl border-b-[1.5px] border-[#E8E0D4]">
         <div className="max-w-[1280px] mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
 
           {/* Logo */}
@@ -139,7 +139,7 @@ const Navbar = () => {
 
       {/* Mobile-only sticky Fantasy quick-action strip — home page only */}
       {pathname === "/" && (
-        <div className="md:hidden sticky top-16 z-40 bg-white/95 backdrop-blur-xl border-b-[1.5px] border-[#E8E0D4] shadow-[0_4px_12px_rgba(26,18,8,0.06)]">
+        <div className="md:hidden sticky top-16 z-40 bg-white border-b-[1.5px] border-[#E8E0D4] shadow-[0_4px_12px_rgba(26,18,8,0.06)]">
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-none px-3 py-2">
             <Link
               to="/fantasy"
@@ -153,7 +153,7 @@ const Navbar = () => {
 
       {/* ── Mobile bottom navigation ── */}
       <div
-        className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t-[1.5px] border-[#E8E0D4] bg-white/95 backdrop-blur-xl shadow-[0_-8px_24px_rgba(26,18,8,0.08)]"
+        className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t-[1.5px] border-[#E8E0D4] bg-white shadow-[0_-8px_24px_rgba(26,18,8,0.08)]"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.35rem)" }}
       >
         <div className="mx-auto flex h-16 max-w-[560px] items-center justify-around px-2">
