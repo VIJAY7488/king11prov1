@@ -7,6 +7,12 @@ import { useApp } from "@/context/AppContext";
 import { useAuthStore } from "@/store/authStore";
 import type { MatchFromApi } from "@/types/api";
 import type { Contest } from "@/components/contest/ContestCard";
+import type { LivePlayerScore } from "@/hooks/useMatchWebSocket";
+
+interface MatchScoreApiResponse {
+  team1?: LivePlayerScore[];
+  team2?: LivePlayerScore[];
+}
 
 export function MatchesPage() {
   const navigate = useNavigate();
@@ -18,6 +24,10 @@ export function MatchesPage() {
   const token = useAuthStore((s) => s.token);
   const { toast } = useApp();
   const [matches, setMatches] = useState<MatchFromApi[]>([]);
+  const [selectedMatch, setSelectedMatch] = useState<MatchFromApi | null>(null);
+  const [team1Scores, setTeam1Scores] = useState<LivePlayerScore[]>([]);
+  const [team2Scores, setTeam2Scores] = useState<LivePlayerScore[]>([]);
+  const [scoreLoading, setScoreLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,9 +89,70 @@ export function MatchesPage() {
     if (urlMatchId) sessionStorage.setItem("selectedMatchId", urlMatchId);
   }, [urlMatchId]);
 
+  useEffect(() => {
+    async function loadScorecard() {
+      if (!targetMatchId) {
+        setSelectedMatch(null);
+        setTeam1Scores([]);
+        setTeam2Scores([]);
+        return;
+      }
+
+      setScoreLoading(true);
+      try {
+        const [mRes, sRes] = await Promise.all([
+          api.get(`/matches/${targetMatchId}`),
+          api.get(`/scores/match/${targetMatchId}`).catch(() => null),
+        ]);
+        setSelectedMatch(mRes.data?.data?.match ?? null);
+        const scoreData: MatchScoreApiResponse = sRes?.data?.data ?? {};
+        setTeam1Scores(scoreData.team1 ?? []);
+        setTeam2Scores(scoreData.team2 ?? []);
+      } catch {
+        setSelectedMatch(null);
+        setTeam1Scores([]);
+        setTeam2Scores([]);
+      } finally {
+        setScoreLoading(false);
+      }
+    }
+    loadScorecard();
+  }, [targetMatchId]);
+
   const visibleMatches = targetMatchId
     ? matches.filter((m) => (m.id ?? m._id ?? "") === targetMatchId)
     : matches;
+
+  function formatBattingRow(player: LivePlayerScore) {
+    return {
+      name: player.playerName,
+      runs: player.runs ?? 0,
+      balls: player.ballsFaced ?? 0,
+      fours: player.fours ?? 0,
+      sixes: player.sixes ?? 0,
+      sr: player.strikeRate ?? 0,
+      out: player.isOut,
+    };
+  }
+
+  function formatBowlingRow(player: LivePlayerScore) {
+    return {
+      name: player.playerName,
+      overs: player.oversBowled ?? 0,
+      maidens: player.maidenOvers ?? 0,
+      runs: player.runsConceded ?? 0,
+      wickets: player.wickets ?? 0,
+      econ: player.economy ?? 0,
+    };
+  }
+
+  function getTeamTotals(players: LivePlayerScore[]) {
+    const battingRuns = players.reduce((sum, p) => sum + (p.runs ?? 0), 0);
+    const wickets = players.filter((p) => p.isOut).length;
+    const balls = players.reduce((sum, p) => sum + (p.ballsFaced ?? 0), 0);
+    const overs = `${Math.floor(balls / 6)}.${balls % 6}`;
+    return { battingRuns, wickets, overs };
+  }
 
   const contestsTabTo = targetMatchId
     ? `/contests?matchId=${encodeURIComponent(targetMatchId)}`
@@ -150,6 +221,106 @@ export function MatchesPage() {
         </div>
       ) : error ? (
         <div className="bg-red-50 text-red-600 p-4 rounded-xl font-bold">{error}</div>
+      ) : targetMatchId && (scoreLoading || selectedMatch) ? (
+        <div className="space-y-4">
+          {scoreLoading ? (
+            <div className="h-52 bg-[#F4F1EC] animate-pulse rounded-2xl" />
+          ) : (
+            <>
+              <div
+                className="bg-gradient-to-br from-[#1A1208] to-[#2D2010] rounded-2xl p-4 text-white"
+                style={{ borderTop: `3px solid ${selectedMatch?.status === "LIVE" ? "#EF4444" : "#EA4800"}` }}
+              >
+                <p className="text-[0.7rem] font-black tracking-wider uppercase text-white/70">
+                  {selectedMatch?.status} · {selectedMatch?.format ?? "CRICKET"}
+                </p>
+                <p className="font-display font-black text-xl mt-1">
+                  {selectedMatch?.team1Name} vs {selectedMatch?.team2Name}
+                </p>
+                <p className="text-xs text-white/70 mt-1">Live Scorecard</p>
+              </div>
+
+              {[
+                { teamName: selectedMatch?.team1Name ?? "Team 1", batting: team1Scores, bowling: team2Scores },
+                { teamName: selectedMatch?.team2Name ?? "Team 2", batting: team2Scores, bowling: team1Scores },
+              ].map((team) => {
+                const totals = getTeamTotals(team.batting);
+                const battingRows = team.batting.map(formatBattingRow).sort((a, b) => b.runs - a.runs);
+                const bowlingRows = team.bowling
+                  .map(formatBowlingRow)
+                  .filter((b) => b.overs > 0 || b.wickets > 0 || b.runs > 0);
+
+                return (
+                  <div key={team.teamName} className="bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl overflow-hidden">
+                    <div className="bg-[#F4F1EC] px-4 py-3 border-b border-[#E8E0D4]">
+                      <p className="font-display font-black text-lg text-[#1A1208]">{team.teamName}</p>
+                      <p className="text-xs text-[#7A6A55]">{totals.battingRuns}/{totals.wickets} ({totals.overs} ov)</p>
+                    </div>
+                    <div className="px-4 py-3">
+                      <p className="text-xs font-black uppercase tracking-wider text-[#7A6A55] mb-2">Batting</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead className="text-[#7A6A55]">
+                            <tr>
+                              <th className="text-left py-1">Batter</th>
+                              <th className="text-right py-1">R</th>
+                              <th className="text-right py-1">B</th>
+                              <th className="text-right py-1">4s</th>
+                              <th className="text-right py-1">6s</th>
+                              <th className="text-right py-1">SR</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {battingRows.map((p) => (
+                              <tr key={p.name} className="border-t border-[#F0E9DE]">
+                                <td className="py-1.5 pr-2 text-[#1A1208] font-semibold">{p.name}{!p.out ? "*" : ""}</td>
+                                <td className="py-1.5 text-right">{p.runs}</td>
+                                <td className="py-1.5 text-right">{p.balls}</td>
+                                <td className="py-1.5 text-right">{p.fours}</td>
+                                <td className="py-1.5 text-right">{p.sixes}</td>
+                                <td className="py-1.5 text-right">{Number(p.sr).toFixed(1)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <p className="text-xs font-black uppercase tracking-wider text-[#7A6A55] mt-4 mb-2">Bowling</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead className="text-[#7A6A55]">
+                            <tr>
+                              <th className="text-left py-1">Bowler</th>
+                              <th className="text-right py-1">O</th>
+                              <th className="text-right py-1">M</th>
+                              <th className="text-right py-1">R</th>
+                              <th className="text-right py-1">W</th>
+                              <th className="text-right py-1">Econ</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bowlingRows.length === 0 ? (
+                              <tr><td colSpan={6} className="py-2 text-[#7A6A55]">No bowling stats yet.</td></tr>
+                            ) : bowlingRows.map((b) => (
+                              <tr key={b.name} className="border-t border-[#F0E9DE]">
+                                <td className="py-1.5 pr-2 text-[#1A1208] font-semibold">{b.name}</td>
+                                <td className="py-1.5 text-right">{Number(b.overs).toFixed(1)}</td>
+                                <td className="py-1.5 text-right">{b.maidens}</td>
+                                <td className="py-1.5 text-right">{b.runs}</td>
+                                <td className="py-1.5 text-right">{b.wickets}</td>
+                                <td className="py-1.5 text-right">{Number(b.econ).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
       ) : visibleMatches.length === 0 ? (
         <div className="bg-white border-[1.5px] border-[#E8E0D4] p-12 rounded-2xl text-center">
           <span className="text-4xl mb-3 block">🏏</span>
