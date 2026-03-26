@@ -82,10 +82,10 @@ export function CreateTeamModal({
         const list = res.data?.data?.contests ?? [];
         const mapped = list.map((c: any) => ({ id: c.id ?? c._id, name: c.name, entryFee: c.entryFee }));
         setContests(mapped);
-        // Auto-select the only contest silently — user never sees a picker.
         // In edit mode, keep contest locked to the team's existing contestId.
+        // In create mode, auto-select the first available contest silently.
         if (initialTeam?.contestId) setContestId(initialTeam.contestId);
-        else if (mapped.length === 1) setContestId(mapped[0].id);
+        else if (mapped.length > 0) setContestId(mapped[0].id);
       })
       .catch((err) => {
         addToast({ type: "error", icon: "❌", msg: getErrorMessage(err, "Failed to load contests for this match") });
@@ -185,7 +185,7 @@ export function CreateTeamModal({
 
   async function handleSave() {
     if (!contestId.trim()) {
-      addToast({ type: "error", icon: "⚠️", msg: "Please select or enter a Contest ID" });
+      addToast({ type: "error", icon: "⚠️", msg: "No contest available for this match." });
       return;
     }
     setSaving(true);
@@ -392,21 +392,6 @@ export function CreateTeamModal({
   /* ── Step 2: Team Name + Preview + Save ── */
   const step2 = (
     <div>
-      {/* If multiple contests for this match, show a picker — otherwise silently auto-selected */}
-      {mode === "create" && contests.length > 1 && (
-        <div className="mb-4">
-          <label className="block text-xs font-bold text-[#3D3020] mb-1.5">Select Contest</label>
-          <select value={contestId} onChange={(e) => setContestId(e.target.value)}
-            className="w-full border-[1.5px] border-[#E8E0D4] rounded-xl px-3 py-2.5 text-sm font-semibold focus:outline-none focus:border-[#EA4800]">
-            <option value="">— Pick a contest —</option>
-            {contests.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.entryFee === 0 ? "FREE ENTRY" : `₹${c.entryFee} entry`})
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
       {loadingContests && <p className="text-xs text-[#7A6A55] mb-3">Loading contests…</p>}
       {!loadingContests && contests.length === 0 && mode === "create" && (
         <p className="text-xs text-red-500 mb-3">⚠️ No contests found for this match. Create one in Admin → Contests first.</p>
