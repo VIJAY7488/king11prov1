@@ -48,6 +48,14 @@ function getRouteSeo(pathname: string): RouteSeoConfig {
     };
   }
 
+  if (pathname === "/download") {
+    return {
+      title: "Download King11Pro App APK",
+      description:
+        "Download the official King11Pro Android APK and install the fantasy cricket app on your device.",
+    };
+  }
+
   if (pathname.startsWith("/contests/") && pathname.endsWith("/live")) {
     return {
       title: "Live Contest Leaderboard | King11Pro",

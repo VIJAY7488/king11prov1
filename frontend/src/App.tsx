@@ -46,6 +46,7 @@ const TransactionsPage = lazy(async () => {
   const mod = await import("./pages/TransactionsPage");
   return { default: mod.TransactionsPage };
 });
+const DownloadPage = lazy(() => import("./pages/DownloadPage"));
 
 const AdminLayout = lazy(() => import("./admin/components/AdminLayout"));
 const AdminLoginPage = lazy(() => import("./admin/pages/AdminLoginPage"));
@@ -162,6 +163,8 @@ export default function App() {
       <AppProvider>
         <Suspense fallback={<RouteLoader />}>
           <Routes>
+            <Route path="/download" element={<DownloadPage />} />
+
             {/* ── Admin section — no Navbar, dark layout ── */}
             <Route path="/admin/login" element={<AdminLoginPage />} />
             <Route path="/admin" element={<AdminRequired><AdminLayout /></AdminRequired>}>
