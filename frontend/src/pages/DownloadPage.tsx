@@ -27,14 +27,20 @@ export default function DownloadPage() {
   };
 
   return (
-    <div
-      className="relative min-h-screen overflow-hidden bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: "url('/ipl-image.png')" }}
-    >
-      <div className="absolute inset-0 bg-black/55" />
+    <div className="relative min-h-screen overflow-hidden">
+      <img
+        src="/ipl-image.png"
+        alt=""
+        aria-hidden="true"
+        loading="eager"
+        decoding="async"
+        fetchPriority="high"
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+      <div className="absolute inset-0 bg-black/35 sm:bg-black/55" />
 
       <div className="relative z-10 flex min-h-screen items-center justify-center p-6">
-        <section className="w-full max-w-lg rounded-3xl border border-white/35 bg-white/14 p-6 text-white backdrop-blur-sm sm:p-8">
+        <section className="w-full max-w-lg rounded-3xl border border-white/35 bg-white/14 p-6 text-white backdrop-blur-none sm:backdrop-blur-sm sm:p-8">
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-orange-200">
             King11Pro App
           </p>
