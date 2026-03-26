@@ -7,7 +7,7 @@ import { buildReferralLink } from "@/lib/referral";
 import { useApp } from "@/context/AppContext";
 import { useAuthStore } from "@/store/authStore";
 import type { MatchFromApi } from "@/types/api";
-import { ContestCard, type Contest } from "@/components/contest/ContestCard";
+import type { Contest } from "@/components/contest/ContestCard";
 import { Modal } from "@/components/ui/modal";
 import HeroBanner from "@/components/home/HeroBanner";
 
@@ -22,7 +22,6 @@ const Homepage = () => {
   };
 
   const [matches, setMatches] = useState<MatchFromApi[]>([]);
-  const [contests, setContests] = useState<Contest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPointTable, setShowPointTable] = useState(false);
@@ -42,15 +41,6 @@ const Homepage = () => {
       if (!token) {
         const contestRes = await api.get("/contests?limit=12");
         const allContests: Contest[] = contestRes.data?.data?.contests ?? [];
-        const openContests = allContests
-          .filter((c) => c.status === "OPEN" || c.status === "FULL")
-          .sort((a, b) => {
-            if (a.status === "OPEN" && b.status !== "OPEN") return -1;
-            if (a.status !== "OPEN" && b.status === "OPEN") return 1;
-            return b.prizePool - a.prizePool;
-          })
-          .slice(0, 6);
-        setContests(openContests);
         setMatches(extractLiveUpcomingMatches(allContests).slice(0, 6));
         setReferralSummary(null);
         hasData = true;
@@ -73,18 +63,7 @@ const Homepage = () => {
 
         if (contestRes.status === "fulfilled") {
           allContests = contestRes.value.data?.data?.contests ?? [];
-          const openContests = allContests
-            .filter((c) => c.status === "OPEN" || c.status === "FULL")
-            .sort((a, b) => {
-              if (a.status === "OPEN" && b.status !== "OPEN") return -1;
-              if (a.status !== "OPEN" && b.status === "OPEN") return 1;
-              return b.prizePool - a.prizePool;
-            })
-            .slice(0, 6);
-          setContests(openContests);
           hasData = true;
-        } else {
-          setContests([]);
         }
 
         if (matchRes.status !== "fulfilled" && allContests.length > 0) {
@@ -190,20 +169,6 @@ const Homepage = () => {
     const selectedMatchId = matchId(m);
     if (selectedMatchId) sessionStorage.setItem("selectedMatchId", selectedMatchId);
     navigate(`/contests?matchId=${selectedMatchId}`);
-  }
-
-  function handleJoinContest(c: Contest) {
-    if (!token) {
-      toast({ type: "info", icon: "🔒", msg: "Please login to join a contest" });
-      navigate("/login");
-      return;
-    }
-    const matchStatus = (c.match?.status ?? "UPCOMING").toUpperCase();
-    if (matchStatus === "LIVE") {
-      navigate(`/contests/${c.id}/live`);
-      return;
-    }
-    navigate(`/teams?matchId=${c.matchId}&contestId=${c.id}`);
   }
 
   async function shareReferralLink() {
@@ -569,32 +534,6 @@ const Homepage = () => {
             </div>
           )}
         </div>
-      </section>
-
-      {/* ── Contests ── */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display font-bold text-lg flex items-center gap-2">
-            🏆 Hot Contests
-            <span className="text-sm font-normal text-[#7A6A55]">({contests.length})</span>
-          </h2>
-          <button onClick={() => navigate("/contests")} className="text-sm font-bold text-[#EA4800] hover:text-[#FF5A1A]">See All →</button>
-        </div>
-
-        {
-          contests.length === 0 ? (
-            <div className="text-center py-10 bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl text-[#7A6A55]">
-              <p className="text-3xl mb-2">🏆</p>
-              <p className="font-bold text-[#3D3020]">No active contests right now</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {contests.map((c) => (
-                <ContestCard key={c.id} contest={c} onJoin={handleJoinContest} />
-              ))}
-            </div>
-          )
-        }
       </section>
 
       <Modal
