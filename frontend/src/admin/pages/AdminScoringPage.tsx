@@ -58,6 +58,9 @@ export default function AdminScoringPage() {
   const [batter,  setBatter]  = useState<Player | null>(null);
   const [bowler,  setBowler]  = useState<Player | null>(null);
   const [fielder, setFielder] = useState<Player | null>(null);
+  const [batterSearch, setBatterSearch] = useState("");
+  const [bowlerSearch, setBowlerSearch] = useState("");
+  const [fielderSearch, setFielderSearch] = useState("");
 
   // Ball Event
   const [over,   setOver]   = useState(0);
@@ -111,6 +114,71 @@ export default function AdminScoringPage() {
     else setBallN((b) => b + 1);
   }
 
+  function resetBallForm() {
+    setRuns(0);
+    setIsWide(false);
+    setIsNoBall(false);
+    setIsLegBye(false);
+    setIsFour(false);
+    setIsSix(false);
+    setIsOut(false);
+    setDismissalType("BOWLED");
+    setIsOverthrow(false);
+    setOverthrowRuns(1);
+    setOverthrowBoundary(false);
+    setFielder(null);
+  }
+
+  function applyQuickEvent(type: "DOT" | "ONE" | "TWO" | "FOUR" | "SIX" | "WIDE" | "NO_BALL" | "LEG_BYE_1" | "WICKET") {
+    if (type === "DOT") {
+      resetBallForm();
+      return;
+    }
+    if (type === "ONE") {
+      resetBallForm();
+      setRuns(1);
+      return;
+    }
+    if (type === "TWO") {
+      resetBallForm();
+      setRuns(2);
+      return;
+    }
+    if (type === "FOUR") {
+      resetBallForm();
+      setRuns(4);
+      setIsFour(true);
+      return;
+    }
+    if (type === "SIX") {
+      resetBallForm();
+      setRuns(6);
+      setIsSix(true);
+      return;
+    }
+    if (type === "WIDE") {
+      resetBallForm();
+      setIsWide(true);
+      return;
+    }
+    if (type === "NO_BALL") {
+      resetBallForm();
+      setIsNoBall(true);
+      return;
+    }
+    if (type === "LEG_BYE_1") {
+      resetBallForm();
+      setIsLegBye(true);
+      setRuns(1);
+      return;
+    }
+    if (type === "WICKET") {
+      resetBallForm();
+      setIsOut(true);
+      return;
+    }
+  }
+
   // ── Submit Ball Event ──────────────────────────────────────────────────────
 
   async function submitBall() {
@@ -156,9 +224,8 @@ export default function AdminScoringPage() {
       setLog((prev) => [desc, ...prev].slice(0, 30));
       setSuccess("✅ Ball submitted!");
       advanceBall();
-      // Reset toggles for next ball
-      setRuns(0); setIsWide(false); setIsNoBall(false); setIsLegBye(false); setIsFour(false); setIsSix(false);
-      setIsOut(false); setIsOverthrow(false);
+      // Reset ball state for next entry while keeping selected batter/bowler.
+      resetBallForm();
     } catch (e: any) {
       setError(e?.response?.data?.message ?? "Error submitting ball");
     } finally { setSubmitting(false); }
@@ -181,12 +248,26 @@ export default function AdminScoringPage() {
 
   const battingPlayers = battingTeam ? players.filter((p) => p.team === battingTeam) : [];
   const bowlingPlayers = battingTeam ? players.filter((p) => p.team !== battingTeam) : players;
+  const filteredBattingPlayers = battingPlayers.filter((p) => p.name.toLowerCase().includes(batterSearch.toLowerCase()));
+  const filteredBowlingPlayers = bowlingPlayers.filter((p) => p.name.toLowerCase().includes(bowlerSearch.toLowerCase()));
+  const filteredFieldingPlayers = bowlingPlayers.filter((p) => p.name.toLowerCase().includes(fielderSearch.toLowerCase()));
+
+  function pickDefaultPlayers(team: "team1" | "team2") {
+    const bat = players.filter((p) => p.team === team);
+    const bowl = players.filter((p) => p.team !== team);
+    const defaultBatter = bat.find((p) => p.role === "BATSMAN") ?? bat.find((p) => p.role === "WICKET_KEEPER") ?? bat[0] ?? null;
+    const defaultBowler = bowl.find((p) => p.role === "BOWLER") ?? bowl.find((p) => p.role === "ALL_ROUNDER") ?? bowl[0] ?? null;
+    setBatter(defaultBatter);
+    setBowler(defaultBowler);
+    setFielder(defaultBowler);
+  }
 
   function switchBattingTeam(team: "team1" | "team2") {
     setBattingTeam(team);
-    setBatter(null);
-    setBowler(null);
-    setFielder(null);
+    setBatterSearch("");
+    setBowlerSearch("");
+    setFielderSearch("");
+    pickDefaultPlayers(team);
   }
 
   return (
@@ -266,6 +347,12 @@ export default function AdminScoringPage() {
             <div style={{ display: "grid", gap: 10 }}>
               <div>
                 <label style={S.label}>Batter</label>
+                <input
+                  value={batterSearch}
+                  onChange={(e) => setBatterSearch(e.target.value)}
+                  placeholder="Search batter..."
+                  style={{ ...S.input, marginBottom: 6 }}
+                />
                 <select
                   value={batter?._id ?? ""}
                   onChange={(e) => {
@@ -275,13 +362,39 @@ export default function AdminScoringPage() {
                   style={{ ...S.input, appearance: "none" as const }}
                 >
                   <option value="">Select batter</option>
-                  {battingPlayers.map((p) => (
+                  {filteredBattingPlayers.map((p) => (
                     <option key={`bat-${p._id}`} value={p._id}>{p.name} ({p.teamName})</option>
                   ))}
                 </select>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, maxHeight: 72, overflowY: "auto" }}>
+                  {filteredBattingPlayers.slice(0, 12).map((p) => (
+                    <button
+                      key={`bat-chip-${p._id}`}
+                      onClick={() => setBatter(p)}
+                      style={{
+                        border: `1px solid ${batter?._id === p._id ? "#EA4800" : "#2A2A2A"}`,
+                        background: batter?._id === p._id ? "rgba(234,72,0,.14)" : "#0F0F0F",
+                        color: batter?._id === p._id ? "#EA4800" : "#bbb",
+                        borderRadius: 999,
+                        padding: "4px 8px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label style={S.label}>Bowler</label>
+                <input
+                  value={bowlerSearch}
+                  onChange={(e) => setBowlerSearch(e.target.value)}
+                  placeholder="Search bowler..."
+                  style={{ ...S.input, marginBottom: 6 }}
+                />
                 <select
                   value={bowler?._id ?? ""}
                   onChange={(e) => {
@@ -291,13 +404,39 @@ export default function AdminScoringPage() {
                   style={{ ...S.input, appearance: "none" as const }}
                 >
                   <option value="">Select bowler</option>
-                  {bowlingPlayers.map((p) => (
+                  {filteredBowlingPlayers.map((p) => (
                     <option key={`bowl-${p._id}`} value={p._id}>{p.name} ({p.teamName})</option>
                   ))}
                 </select>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, maxHeight: 72, overflowY: "auto" }}>
+                  {filteredBowlingPlayers.slice(0, 12).map((p) => (
+                    <button
+                      key={`bowl-chip-${p._id}`}
+                      onClick={() => setBowler(p)}
+                      style={{
+                        border: `1px solid ${bowler?._id === p._id ? "#EA4800" : "#2A2A2A"}`,
+                        background: bowler?._id === p._id ? "rgba(234,72,0,.14)" : "#0F0F0F",
+                        color: bowler?._id === p._id ? "#EA4800" : "#bbb",
+                        borderRadius: 999,
+                        padding: "4px 8px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label style={S.label}>Fielder (Optional)</label>
+                <input
+                  value={fielderSearch}
+                  onChange={(e) => setFielderSearch(e.target.value)}
+                  placeholder="Search fielder..."
+                  style={{ ...S.input, marginBottom: 6 }}
+                />
                 <select
                   value={fielder?._id ?? ""}
                   onChange={(e) => {
@@ -307,7 +446,7 @@ export default function AdminScoringPage() {
                   style={{ ...S.input, appearance: "none" as const }}
                 >
                   <option value="">None</option>
-                  {bowlingPlayers.map((p) => (
+                  {filteredFieldingPlayers.map((p) => (
                     <option key={`field-${p._id}`} value={p._id}>{p.name} ({p.teamName})</option>
                   ))}
                 </select>
@@ -318,6 +457,14 @@ export default function AdminScoringPage() {
               <div style={{ color: "#9CA3AF", fontWeight: 600 }}>Batter: <span style={{ color: "#fff" }}>{batter?.name ?? "—"}</span></div>
               <div style={{ color: "#9CA3AF", fontWeight: 600 }}>Bowler: <span style={{ color: "#fff" }}>{bowler?.name ?? "—"}</span></div>
               <div style={{ color: "#9CA3AF", fontWeight: 600 }}>Fielder: <span style={{ color: "#fff" }}>{fielder?.name ?? "—"}</span></div>
+              <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  onClick={() => battingTeam && pickDefaultPlayers(battingTeam)}
+                  style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#121212", color: "#ddd", fontSize: 11, fontWeight: 800, cursor: "pointer" }}
+                >
+                  Auto Select Players
+                </button>
+              </div>
             </div>
           </div>
 
@@ -328,6 +475,23 @@ export default function AdminScoringPage() {
 
               {error   && <div style={{ background: "rgba(239,68,68,.1)", border: "1px solid rgba(239,68,68,.3)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#FCA5A5", marginBottom: 12 }}>⚠️ {error}</div>}
               {success && <div style={{ background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.3)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#6EE7B7", marginBottom: 12 }}>{success}</div>}
+
+              {/* Quick actions */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={S.label}>Quick Actions</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  <button onClick={() => applyQuickEvent("DOT")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Dot</button>
+                  <button onClick={() => applyQuickEvent("ONE")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>1 Run</button>
+                  <button onClick={() => applyQuickEvent("TWO")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>2 Runs</button>
+                  <button onClick={() => applyQuickEvent("FOUR")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #EA4800", background: "rgba(234,72,0,.12)", color: "#EA4800", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Four</button>
+                  <button onClick={() => applyQuickEvent("SIX")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #EA4800", background: "rgba(234,72,0,.12)", color: "#EA4800", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Six</button>
+                  <button onClick={() => applyQuickEvent("WIDE")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Wide</button>
+                  <button onClick={() => applyQuickEvent("NO_BALL")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>No Ball</button>
+                  <button onClick={() => applyQuickEvent("LEG_BYE_1")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Leg Bye +1</button>
+                  <button onClick={() => applyQuickEvent("WICKET")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #EF4444", background: "rgba(239,68,68,.12)", color: "#EF4444", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Wicket</button>
+                  <button onClick={resetBallForm} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "transparent", color: "#777", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Reset Ball</button>
+                </div>
+              </div>
 
               {/* Runs */}
               <div style={{ marginBottom: 14 }}>
@@ -406,6 +570,15 @@ export default function AdminScoringPage() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div style={{ marginBottom: 12, padding: "8px 10px", background: "#0F0F0F", borderRadius: 8, fontSize: 12, color: "#9CA3AF" }}>
+                <span style={{ fontWeight: 700, color: "#ddd" }}>This ball:</span>{" "}
+                {runs}{isLegBye ? " Leg-bye" : " Run(s)"}
+                {isWide ? " + Wide" : ""}
+                {isNoBall ? " + No Ball" : ""}
+                {isOverthrow ? ` + ${overthrowRuns} Overthrow` : ""}
+                {isOut ? ` + Wicket (${dismissalType})` : ""}
               </div>
 
               <button onClick={submitBall} disabled={submitting || !batter || !bowler}
