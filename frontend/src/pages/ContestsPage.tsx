@@ -113,12 +113,15 @@ export function ContestsPage() {
   const teamsTabTo = contestTargetMatchId
     ? `/teams?matchId=${encodeURIComponent(contestTargetMatchId)}`
     : "/teams";
+  const statsTabTo = contestTargetMatchId
+    ? `/matches?matchId=${encodeURIComponent(contestTargetMatchId)}`
+    : "/matches";
 
   const mobileTabs = [
     { label: "Contests", icon: "🏆", to: contestTabTo, requireAuth: false },
     { label: "My Contests", icon: "🎯", to: myContestsTabTo, requireAuth: true },
     { label: "Teams", icon: "👕", to: teamsTabTo, requireAuth: true },
-    { label: "Stats", icon: "📊", to: "/matches", requireAuth: false },
+    { label: "Stats", icon: "📊", to: statsTabTo, requireAuth: false },
   ];
 
   return (
@@ -152,6 +155,8 @@ export function ContestsPage() {
               ? location.pathname === "/contests"
               : tab.label === "Teams"
               ? location.pathname === "/teams"
+              : tab.label === "Stats"
+              ? location.pathname === "/matches"
               : location.pathname === tab.to;
             return (
               <button

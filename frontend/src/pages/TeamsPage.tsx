@@ -32,6 +32,9 @@ export function TeamsPage() {
   const teamsTabTo = selectedContestMatchId
     ? `/teams?matchId=${encodeURIComponent(selectedContestMatchId)}`
     : "/teams";
+  const statsTabTo = selectedContestMatchId
+    ? `/matches?matchId=${encodeURIComponent(selectedContestMatchId)}`
+    : "/matches";
 
   const [teams, setTeams] = useState<TeamFromApi[]>([]);
   const [matches, setMatches] = useState<MatchFromApi[]>([]);
@@ -185,7 +188,7 @@ export function TeamsPage() {
     { label: "Contests", icon: "🏆", to: contestTabTo, requireAuth: false },
     { label: "My Contests", icon: "🎯", to: myContestsTabTo, requireAuth: true },
     { label: "Teams", icon: "👕", to: teamsTabTo, requireAuth: true },
-    { label: "Stats", icon: "📊", to: "/matches", requireAuth: false },
+    { label: "Stats", icon: "📊", to: statsTabTo, requireAuth: false },
   ];
 
   // Teams filtered to current match if urlMatchId present
@@ -240,6 +243,8 @@ export function TeamsPage() {
               ? location.pathname === "/joined-contests"
               : tab.label === "Teams"
               ? location.pathname === "/teams"
+              : tab.label === "Stats"
+              ? location.pathname === "/matches"
               : location.pathname === tab.to;
             return (
               <button
