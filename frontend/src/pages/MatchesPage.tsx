@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
 import { extractLiveUpcomingMatches } from "@/lib/matches";
@@ -10,6 +10,11 @@ import type { Contest } from "@/components/contest/ContestCard";
 
 export function MatchesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const urlMatchId = searchParams.get("matchId");
+  const persistedMatchId = sessionStorage.getItem("selectedMatchId");
+  const targetMatchId = urlMatchId ?? persistedMatchId;
   const token = useAuthStore((s) => s.token);
   const { toast } = useApp();
   const [matches, setMatches] = useState<MatchFromApi[]>([]);
@@ -70,9 +75,74 @@ export function MatchesPage() {
     navigate(`/matches/${id}`);
   }
 
+  useEffect(() => {
+    if (urlMatchId) sessionStorage.setItem("selectedMatchId", urlMatchId);
+  }, [urlMatchId]);
+
+  const visibleMatches = targetMatchId
+    ? matches.filter((m) => (m.id ?? m._id ?? "") === targetMatchId)
+    : matches;
+
+  const contestsTabTo = targetMatchId
+    ? `/contests?matchId=${encodeURIComponent(targetMatchId)}`
+    : "/contests";
+  const myContestsTabTo = targetMatchId
+    ? `/joined-contests?matchId=${encodeURIComponent(targetMatchId)}`
+    : "/joined-contests";
+  const teamsTabTo = targetMatchId
+    ? `/teams?matchId=${encodeURIComponent(targetMatchId)}`
+    : "/teams";
+  const statsTabTo = targetMatchId
+    ? `/matches?matchId=${encodeURIComponent(targetMatchId)}`
+    : "/matches";
+
+  const mobileTabs = [
+    { label: "Contests", icon: "🏆", to: contestsTabTo, requireAuth: false },
+    { label: "My Contests", icon: "🎯", to: myContestsTabTo, requireAuth: true },
+    { label: "Teams", icon: "👕", to: teamsTabTo, requireAuth: true },
+    { label: "Stats", icon: "📊", to: statsTabTo, requireAuth: false },
+  ];
+
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-6 pt-6 pb-24 md:pb-8">
       <h1 className="font-display font-black text-3xl mb-6">🏏 Matches</h1>
+
+      <div className="md:hidden mb-5">
+        <div className="grid grid-cols-4 gap-2">
+          {mobileTabs.map((tab) => {
+            const isActive = tab.label === "Contests"
+              ? location.pathname === "/contests"
+              : tab.label === "My Contests"
+              ? location.pathname === "/joined-contests"
+              : tab.label === "Teams"
+              ? location.pathname === "/teams"
+              : tab.label === "Stats"
+              ? location.pathname === "/matches"
+              : location.pathname === tab.to;
+            return (
+              <button
+                key={tab.label}
+                onClick={() => {
+                  if (isActive) return;
+                  if (tab.requireAuth && !token) {
+                    toast({ type: "info", icon: "🔒", msg: "Please login to continue" });
+                    navigate("/login");
+                    return;
+                  }
+                  navigate(tab.to);
+                }}
+                className={`flex flex-col items-center gap-1 py-2.5 px-1 rounded-2xl border-[1.5px] transition-all ${isActive
+                  ? "bg-[#EA4800] border-[#EA4800] text-white shadow-[0_4px_14px_rgba(234,72,0,.30)]"
+                  : "bg-white border-[#E8E0D4] text-[#7A6A55] hover:border-[#EA4800] hover:text-[#EA4800]"
+                  }`}
+              >
+                <span className="text-lg leading-none">{tab.icon}</span>
+                <span className="text-[0.65rem] font-extrabold leading-none whitespace-nowrap">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {loading ? (
         <div className="space-y-4">
@@ -80,7 +150,7 @@ export function MatchesPage() {
         </div>
       ) : error ? (
         <div className="bg-red-50 text-red-600 p-4 rounded-xl font-bold">{error}</div>
-      ) : matches.length === 0 ? (
+      ) : visibleMatches.length === 0 ? (
         <div className="bg-white border-[1.5px] border-[#E8E0D4] p-12 rounded-2xl text-center">
           <span className="text-4xl mb-3 block">🏏</span>
           <p className="font-display font-bold text-lg mb-1">No Matches Right Now</p>
@@ -88,7 +158,7 @@ export function MatchesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {matches.map(m => (
+          {visibleMatches.map(m => (
             <div
               key={matchId(m)}
               onClick={() => handleOpenMatch(m)}
