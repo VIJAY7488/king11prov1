@@ -73,6 +73,7 @@ export default function AdminScoringPage() {
   const [isSix,    setIsSix]    = useState(false);
   const [isOut,    setIsOut]    = useState(false);
   const [dismissalType, setDismissalType] = useState("BOWLED");
+  const [isDirectRunOut, setIsDirectRunOut] = useState(true);
   const [isOverthrow, setIsOverthrow] = useState(false);
   const [overthrowRuns, setOverthrowRuns] = useState(1);
   const [overthrowBoundary, setOverthrowBoundary] = useState(false);
@@ -129,6 +130,7 @@ export default function AdminScoringPage() {
     setIsSix(false);
     setIsOut(false);
     setDismissalType("BOWLED");
+    setIsDirectRunOut(true);
     setIsOverthrow(false);
     setOverthrowRuns(1);
     setOverthrowBoundary(false);
@@ -220,7 +222,17 @@ export default function AdminScoringPage() {
     };
     if (isOut) {
       payload.dismissalType = dismissalType;
-      if (fielder) payload.fieldingPlayerId = fielder._id;
+      if (fielder) {
+        payload.fieldingPlayerId = fielder._id;
+
+        // Fielding scoring flags derived from dismissal type.
+        if (dismissalType === "CAUGHT") payload.isCatch = true;
+        if (dismissalType === "STUMPED") payload.isStumping = true;
+        if (dismissalType === "RUN_OUT") {
+          if (isDirectRunOut) payload.isDirectRunOut = true;
+          else payload.isIndirectRunOut = true;
+        }
+      }
     }
     if (isOverthrow) {
       payload.overthrowRuns = overthrowRuns;
@@ -229,7 +241,8 @@ export default function AdminScoringPage() {
 
     try {
       await api.post("/scores/ball", payload);
-      const desc = `Over ${over}.${ball}: ${batter.name} ${totalRunsThisBall} run(s)${isLegBye ? ` (${runs} LEG-BYE)` : ""}${isWide ? " [WIDE]" : ""}${isNoBall ? " [NO-BALL]" : ""}${isOut ? ` OUT (${dismissalType})` : ""} | Bowl: ${bowler.name}`;
+      const runOutKind = dismissalType === "RUN_OUT" ? (isDirectRunOut ? " DIRECT-HIT" : " INDIRECT") : "";
+      const desc = `Over ${over}.${ball}: ${batter.name} ${totalRunsThisBall} run(s)${isLegBye ? ` (${runs} LEG-BYE)` : ""}${isWide ? " [WIDE]" : ""}${isNoBall ? " [NO-BALL]" : ""}${isOut ? ` OUT (${dismissalType}${runOutKind})` : ""} | Bowl: ${bowler.name}`;
       setLog((prev) => [desc, ...prev].slice(0, 30));
       setSuccess("✅ Ball submitted!");
       advanceBall();
@@ -547,12 +560,23 @@ export default function AdminScoringPage() {
                   <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                     <div>
                       <label style={S.label}>Dismissal Type</label>
-                      <select value={dismissalType} onChange={(e) => setDismissalType(e.target.value)} style={{ ...S.input, appearance: "none" as any }}>
+                      <select
+                        value={dismissalType}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setDismissalType(next);
+                          if (next !== "RUN_OUT") setIsDirectRunOut(true);
+                        }}
+                        style={{ ...S.input, appearance: "none" as any }}
+                      >
                         {DISMISSAL_TYPES.map((d) => <option key={d}>{d}</option>)}
                       </select>
                       {dismissalType === "RUN_OUT" && (
-                        <div style={{ fontSize: 11, color: "#F59E0B", marginTop: 6 }}>
-                          Run-out does not give wicket points to bowler.
+                        <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <Toggle label="Direct Hit" on={isDirectRunOut} onChange={setIsDirectRunOut} />
+                          <div style={{ fontSize: 11, color: "#F59E0B" }}>
+                            Run-out gives fielding points only (no bowler wicket points).
+                          </div>
                         </div>
                       )}
                     </div>
