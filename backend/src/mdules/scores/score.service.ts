@@ -454,12 +454,17 @@ export class ScoreService {
     }
 
     const eventId = buildBallEventId(dto);
-    const processedKey = `scores:ball:processed:${matchId}:${eventId}`;
+    const hasClientEventId = Boolean(dto.eventId?.trim());
+    const processedKey = hasClientEventId
+      ? `scores:ball:processed:${matchId}:${eventId}`
+      : null;
     const lockKey = `scores:ball:lock:${matchId}:${eventId}`;
 
-    const alreadyProcessed = await redisClient.exists(processedKey);
-    if (alreadyProcessed) {
-      throw new AppError('This ball event has already been processed.', 409);
+    if (processedKey) {
+      const alreadyProcessed = await redisClient.exists(processedKey);
+      if (alreadyProcessed) {
+        throw new AppError('This ball event has already been processed.', 409);
+      }
     }
 
     const lockAcquired = await redisClient.set(
@@ -503,11 +508,17 @@ export class ScoreService {
         ) as Promise<IPlayerScore>;
       };
 
+    // Normalize delivery math defensively so mandatory extras are never lost.
+    const batterRunsThisBall = dto.runs + (dto.isOverthrow ? (dto.overthrowRuns ?? 0) : 0);
+    const mandatoryExtras = (dto.isWide ? 1 : 0) + (dto.isNoBall ? 1 : 0);
+    const minRunsConceded = batterRunsThisBall + mandatoryExtras;
+    const normalizedRunsConceded = Math.max(dto.runsConceded, minRunsConceded);
+
     // ── 1. Batter ─────────────────────────────────────────────────────────
     // Runs: include overthrow runs (batter earns +1 per run regardless of source).
     // Fours: only genuine struck boundaries — overthrow boundaries do NOT count.
     const batterInc: Record<string, number> = {
-      runs:       dto.runs + (dto.isOverthrow ? (dto.overthrowRuns ?? 0) : 0),
+      runs:       batterRunsThisBall,
       ballsFaced: dto.ballsFaced,
     };
     // Genuine boundary = isFour is true AND NOT (overthrow that reached the rope)
@@ -526,7 +537,7 @@ export class ScoreService {
       affectedIds.push(dto.battingPlayerId);
 
     // ── 2. Bowler ─────────────────────────────────────────────────────────
-    const bowlerInc: Record<string, number> = { runsConceded: dto.runsConceded };
+    const bowlerInc: Record<string, number> = { runsConceded: normalizedRunsConceded };
     const isLegalDelivery = !dto.isWide && !dto.isNoBall;
 
     if (isLegalDelivery) {
@@ -553,17 +564,18 @@ export class ScoreService {
 
     // ── 3. Fielder ────────────────────────────────────────────────────────
       let updatedFielder: IPlayerScore | null = null;
-      if (dto.fieldingPlayerId && dto.isOut) {
+      const hasFieldingContribution =
+        dto.isCatch || dto.isDirectRunOut || dto.isIndirectRunOut || dto.isStumping;
+
+      if (dto.fieldingPlayerId && hasFieldingContribution) {
         const fielderInc: Record<string, number> = {};
         if (dto.isCatch)          fielderInc['catches']         = 1;
         if (dto.isDirectRunOut)   fielderInc['directRunOuts']   = 1;
         if (dto.isIndirectRunOut) fielderInc['indirectRunOuts'] = 1;
         if (dto.isStumping)       fielderInc['stumpings']       = 1;
 
-        if (Object.keys(fielderInc).length) {
-          updatedFielder = await upsertScore(dto.fieldingPlayerId, fielderInc);
-          affectedIds.push(dto.fieldingPlayerId);
-        }
+        updatedFielder = await upsertScore(dto.fieldingPlayerId, fielderInc);
+        affectedIds.push(dto.fieldingPlayerId);
       }
 
     // ── 4. Recalculate fantasyPoints ──────────────────────────────────────
@@ -592,12 +604,14 @@ export class ScoreService {
       };
 
       await redisClient.publish(matchChannel(matchId), JSON.stringify(event));
-      await redisClient.set(
-        processedKey,
-        new Date().toISOString(),
-        'EX',
-        BALL_EVENT_PROCESSED_TTL_SECONDS
-      );
+      if (processedKey) {
+        await redisClient.set(
+          processedKey,
+          new Date().toISOString(),
+          'EX',
+          BALL_EVENT_PROCESSED_TTL_SECONDS
+        );
+      }
 
       return event;
     } finally {
