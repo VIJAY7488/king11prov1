@@ -45,8 +45,8 @@ export function JoinedContestsPage() {
     ? `/teams?matchId=${encodeURIComponent(targetMatchId)}`
     : "/teams";
   const statsTabTo = targetMatchId
-    ? `/matches?matchId=${encodeURIComponent(targetMatchId)}`
-    : "/matches";
+    ? `/matches?view=stats&matchId=${encodeURIComponent(targetMatchId)}`
+    : "/matches?view=stats";
 
   const [items, setItems] = useState<JoinedContestItem[]>([]);
   const [loading, setLoading] = useState(true);

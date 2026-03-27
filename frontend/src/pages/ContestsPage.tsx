@@ -114,8 +114,8 @@ export function ContestsPage() {
     ? `/teams?matchId=${encodeURIComponent(contestTargetMatchId)}`
     : "/teams";
   const statsTabTo = contestTargetMatchId
-    ? `/matches?matchId=${encodeURIComponent(contestTargetMatchId)}`
-    : "/matches";
+    ? `/matches?view=stats&matchId=${encodeURIComponent(contestTargetMatchId)}`
+    : "/matches?view=stats";
 
   const mobileTabs = [
     { label: "Contests", icon: "🏆", to: contestTabTo, requireAuth: false },

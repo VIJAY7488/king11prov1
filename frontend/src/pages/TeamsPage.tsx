@@ -33,8 +33,8 @@ export function TeamsPage() {
     ? `/teams?matchId=${encodeURIComponent(selectedContestMatchId)}`
     : "/teams";
   const statsTabTo = selectedContestMatchId
-    ? `/matches?matchId=${encodeURIComponent(selectedContestMatchId)}`
-    : "/matches";
+    ? `/matches?view=stats&matchId=${encodeURIComponent(selectedContestMatchId)}`
+    : "/matches?view=stats";
 
   const [teams, setTeams] = useState<TeamFromApi[]>([]);
   const [matches, setMatches] = useState<MatchFromApi[]>([]);
