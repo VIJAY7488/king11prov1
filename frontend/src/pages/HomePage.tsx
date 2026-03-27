@@ -27,7 +27,7 @@ const Homepage = () => {
   const [showPointTable, setShowPointTable] = useState(false);
   const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
   const [referralSlide, setReferralSlide] = useState(0);
-  const [matchFilter, setMatchFilter] = useState<"recommended" | "starting-soon">("recommended");
+  const [matchFilter, setMatchFilter] = useState<"recommended" | "starting-soon" | "live-matches">("recommended");
 
 
   const { toast } = useApp();
@@ -132,6 +132,16 @@ const Homepage = () => {
   };
 
   const filteredMatches = (() => {
+    if (matchFilter === "live-matches") {
+      return [...matches]
+        .filter((m) => m.status === "LIVE")
+        .sort((a, b) => {
+          const da = matchDateObj(a)?.getTime() ?? 0;
+          const db = matchDateObj(b)?.getTime() ?? 0;
+          return db - da;
+        });
+    }
+
     if (matchFilter === "starting-soon") {
       const fiveHoursMs = 5 * 60 * 60 * 1000;
       const now = Date.now();
@@ -360,6 +370,15 @@ const Homepage = () => {
           >
             ⏰ Starting Soon
           </button>
+          <button
+            onClick={() => setMatchFilter("live-matches")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-extrabold border-[1.5px] transition-all ${matchFilter === "live-matches"
+              ? "bg-[#EA4800] text-white border-[#EA4800] shadow-[0_4px_14px_rgba(234,72,0,.30)]"
+              : "bg-white text-[#7A6A55] border-[#E8E0D4] hover:border-[#EA4800] hover:text-[#EA4800]"
+              }`}
+          >
+            🔴 Live Matches
+          </button>
         </div>
 
         {/* Match cards grid */}
@@ -519,6 +538,8 @@ const Homepage = () => {
               <p className="font-bold text-[#3D3020]">
                 {matchFilter === "starting-soon"
                   ? "No matches starting right now"
+                  : matchFilter === "live-matches"
+                    ? "No live matches right now"
                   : "No matches available right now"}
               </p>
               {matchFilter === "starting-soon" && matches.length > 0 && (
