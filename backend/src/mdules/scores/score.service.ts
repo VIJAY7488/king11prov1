@@ -803,12 +803,19 @@ export class ScoreService {
           });
         })();
 
+      // Product rule: guaranteed contests with 2 or fewer joined entries
+      // should award only rank 1 (winner-takes-all).
+      const rankPrizes =
+        (contest as any).isGuaranteed && rows.length <= 2
+          ? [Math.round(Number((contest as any).prizePool ?? 0) * 100) / 100]
+          : prizeDist.rankPrizes;
+
       const leaderboardEntries: WsLeaderboardEntry[] = [];
       for (let i = 0; i < rows.length; i++) {
         const e = rows[i];
         const user = e.userId as any;
         const rank = i + 1;
-        const prizeAmount = prizeDist.rankPrizes[i] ?? 0;
+        const prizeAmount = rankPrizes[i] ?? 0;
         if (prizeAmount > 0) {
           await walletService.creditContestWinnings(
             user._id?.toString() ?? e.userId.toString(),
