@@ -240,27 +240,29 @@ export function JoinedContestsPage() {
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => load(true)}>🔄 Rank</Button>
+                    <Button variant="outline" size="sm" onClick={() => load(true)}>🔄 Refresh</Button>
                     {(canViewLive || canCheckRank) && (
                       <Button
                         size="sm"
                         onClick={() => navigate(`/contests/${item.contest.id}/live`)}
                       >
-                        {canViewLive ? "View Live" : "Check Rank"}
+                        View Rank
                       </Button>
                     )}
-                    <Button
-                      size="sm"
-                      variant={isEditable ? "default" : "outline"}
-                      disabled={!isEditable}
-                      onClick={() => {
-                        if (!item.match) return;
-                        setEditing(item);
-                        setShowEdit(true);
-                      }}
-                    >
-                      {isEditable ? "Edit Team" : "Locked"}
-                    </Button>
+                    {!(canViewLive || canCheckRank) && (
+                      <Button
+                        size="sm"
+                        variant={isEditable ? "default" : "outline"}
+                        disabled={!isEditable}
+                        onClick={() => {
+                          if (!item.match) return;
+                          setEditing(item);
+                          setShowEdit(true);
+                        }}
+                      >
+                        {isEditable ? "Edit Team" : "Waiting"}
+                      </Button>
+                    )}
                   </div>
                 </div>
 
