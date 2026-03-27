@@ -155,12 +155,17 @@ export function MatchesPage() {
     };
   }
 
-  function getTeamTotals(players: LivePlayerScore[]) {
+  function getTeamTotals(players: LivePlayerScore[], oppositionBowling: LivePlayerScore[]) {
     const battingRuns = players.reduce((sum, p) => sum + (p.runs ?? 0), 0);
     const wickets = players.filter((p) => p.isOut).length;
     const balls = players.reduce((sum, p) => sum + (p.ballsFaced ?? 0), 0);
     const overs = `${Math.floor(balls / 6)}.${balls % 6}`;
-    return { battingRuns, wickets, overs };
+    const wideRuns = oppositionBowling.reduce((sum, p) => sum + (p.wideRunsConceded ?? 0), 0);
+    const noBallRuns = oppositionBowling.reduce((sum, p) => sum + (p.noBallRunsConceded ?? 0), 0);
+    const legByeRuns = oppositionBowling.reduce((sum, p) => sum + (p.legByeRunsConceded ?? 0), 0);
+    const extras = wideRuns + noBallRuns + legByeRuns;
+    const totalRuns = battingRuns + extras;
+    return { battingRuns, wickets, overs, extras, wideRuns, noBallRuns, legByeRuns, totalRuns };
   }
 
   const contestsTabTo = contextMatchId
@@ -255,7 +260,7 @@ export function MatchesPage() {
                 { teamName: selectedMatch?.team1Name ?? "Team 1", batting: team1Scores, bowling: team2Scores },
                 { teamName: selectedMatch?.team2Name ?? "Team 2", batting: team2Scores, bowling: team1Scores },
               ].map((team) => {
-                const totals = getTeamTotals(team.batting);
+                const totals = getTeamTotals(team.batting, team.bowling);
                 const battingRows = team.batting.map(formatBattingRow).sort((a, b) => b.runs - a.runs);
                 const bowlingRows = team.bowling
                   .map(formatBowlingRow)
@@ -265,7 +270,10 @@ export function MatchesPage() {
                   <div key={team.teamName} className="bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl overflow-hidden">
                     <div className="bg-[#F4F1EC] px-4 py-3 border-b border-[#E8E0D4]">
                       <p className="font-display font-black text-lg text-[#1A1208]">{team.teamName}</p>
-                      <p className="text-xs text-[#7A6A55]">{totals.battingRuns}/{totals.wickets} ({totals.overs} ov)</p>
+                      <p className="text-xs text-[#7A6A55]">{totals.totalRuns}/{totals.wickets} ({totals.overs} ov)</p>
+                      <p className="text-[0.68rem] text-[#8A7458] mt-1">
+                        Extras: {totals.extras} (Wd {totals.wideRuns}, Nb {totals.noBallRuns}, Lb {totals.legByeRuns})
+                      </p>
                     </div>
                     <div className="px-4 py-3">
                       <p className="text-xs font-black uppercase tracking-wider text-[#7A6A55] mb-2">Batting</p>

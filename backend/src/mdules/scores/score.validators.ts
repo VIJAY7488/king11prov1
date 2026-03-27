@@ -24,6 +24,9 @@ export const ballEventSchema = Joi.object({
   // Bowler
   bowlingPlayerId:  Joi.string().required(),
   runsConceded:     Joi.number().integer().min(0).required(),
+  wideRunsConceded: Joi.number().integer().min(0).optional(),
+  noBallRunsConceded: Joi.number().integer().min(0).optional(),
+  legByeRunsConceded: Joi.number().integer().min(0).optional(),
   legByeRuns:       Joi.number().integer().min(0).optional(),
   isWide:           Joi.boolean().required(),
   isNoBall:         Joi.boolean().required(),
@@ -75,6 +78,9 @@ export const setPlayerScoreSchema = Joi.object({
   oversBowled:    Joi.number().min(0).optional(),
   maidenOvers:    Joi.number().integer().min(0).optional(),
   runsConceded:   Joi.number().integer().min(0).optional(),
+  wideRunsConceded: Joi.number().integer().min(0).optional(),
+  noBallRunsConceded: Joi.number().integer().min(0).optional(),
+  legByeRunsConceded: Joi.number().integer().min(0).optional(),
   dotBalls:       Joi.number().integer().min(0).optional(),
   lbwBowledCount: Joi.number().integer().min(0).optional(),
 

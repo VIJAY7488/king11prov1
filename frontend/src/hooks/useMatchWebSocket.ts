@@ -21,6 +21,9 @@ export interface LivePlayerScore {
   oversBowled: number;
   maidenOvers: number;
   runsConceded: number;
+  wideRunsConceded?: number;
+  noBallRunsConceded?: number;
+  legByeRunsConceded?: number;
   dotBalls: number;
   economy: number | null;
   catches: number;

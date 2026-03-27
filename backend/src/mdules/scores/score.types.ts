@@ -110,6 +110,9 @@ export interface SetPlayerScoreDTO {
   oversBowled?:    number;
   maidenOvers?:    number;
   runsConceded?:   number;
+  wideRunsConceded?:   number;
+  noBallRunsConceded?: number;
+  legByeRunsConceded?: number;
   dotBalls?:       number;
   lbwBowledCount?: number;
 
@@ -156,6 +159,9 @@ export interface PlayerScorePublic {
   oversBowled:    number;
   maidenOvers:    number;
   runsConceded:   number;
+  wideRunsConceded:   number;
+  noBallRunsConceded: number;
+  legByeRunsConceded: number;
   dotBalls:       number;
   /** Count of LBW + Bowled wickets — each earns an extra +8 bonus. */
   lbwBowledCount: number;

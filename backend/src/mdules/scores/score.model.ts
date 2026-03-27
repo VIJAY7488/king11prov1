@@ -35,6 +35,9 @@ export interface IPlayerScore extends Document {
   oversBowled:    number;
   maidenOvers:    number;
   runsConceded:   number;
+  wideRunsConceded:   number;
+  noBallRunsConceded: number;
+  legByeRunsConceded: number;
   /** Count of legal deliveries on which 0 runs were scored. */
   dotBalls:       number;
   /** Count of LBW + Bowled dismissals — each earns an extra +8 bonus. */
@@ -115,6 +118,9 @@ const playerScoreSchema = new Schema<IPlayerScore, IPlayerScoreModel>(
     oversBowled:    { type: Number, default: 0, min: 0 },
     maidenOvers:    { type: Number, default: 0, min: 0 },
     runsConceded:   { type: Number, default: 0, min: 0 },
+    wideRunsConceded:   { type: Number, default: 0, min: 0 },
+    noBallRunsConceded: { type: Number, default: 0, min: 0 },
+    legByeRunsConceded: { type: Number, default: 0, min: 0 },
     dotBalls:       { type: Number, default: 0, min: 0 },
     lbwBowledCount: { type: Number, default: 0, min: 0 },
 

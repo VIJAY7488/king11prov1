@@ -240,11 +240,16 @@ export default function AdminScoringPage() {
     }
 
     try {
-      await api.post("/scores/ball", payload);
+      const res = await api.post("/scores/ball", payload);
+      const updatedPlayers: any[] = res?.data?.data?.updatedPlayers ?? [];
+      const updatedBatter = updatedPlayers.find((p) => p?.playerId === batter._id);
+      const updatedBowler = updatedPlayers.find((p) => p?.playerId === bowler._id);
       const runOutKind = dismissalType === "RUN_OUT" ? (isDirectRunOut ? " DIRECT-HIT" : " INDIRECT") : "";
       const desc = `Over ${over}.${ball}: ${batter.name} ${totalRunsThisBall} run(s)${isLegBye ? ` (${runs} LEG-BYE)` : ""}${isWide ? " [WIDE]" : ""}${isNoBall ? " [NO-BALL]" : ""}${isOut ? ` OUT (${dismissalType}${runOutKind})` : ""} | Bowl: ${bowler.name}`;
       setLog((prev) => [desc, ...prev].slice(0, 30));
-      setSuccess("✅ Ball submitted!");
+      setSuccess(
+        `✅ Ball submitted! Batter Runs: ${updatedBatter?.runs ?? "NA"} | Bowler Conceded: ${updatedBowler?.runsConceded ?? "NA"}`
+      );
       advanceBall();
       // Reset ball state for next entry while keeping selected batter/bowler.
       resetBallForm();

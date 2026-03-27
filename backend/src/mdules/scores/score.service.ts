@@ -246,6 +246,9 @@ const toPublic = (s: IPlayerScore): PlayerScorePublic => {
     oversBowled:    normalizedOvers,
     maidenOvers:    s.maidenOvers,
     runsConceded:   s.runsConceded,
+    wideRunsConceded:   (s as any).wideRunsConceded ?? 0,
+    noBallRunsConceded: (s as any).noBallRunsConceded ?? 0,
+    legByeRunsConceded: (s as any).legByeRunsConceded ?? 0,
     dotBalls:       s.dotBalls,
     lbwBowledCount: s.lbwBowledCount,
     economy,
@@ -540,6 +543,9 @@ export class ScoreService {
 
     // ── 2. Bowler ─────────────────────────────────────────────────────────
     const bowlerInc: Record<string, number> = { runsConceded: normalizedRunsConceded };
+    if (dto.isWide) bowlerInc['wideRunsConceded'] = 1;
+    if (dto.isNoBall) bowlerInc['noBallRunsConceded'] = 1;
+    if (legByeRunsThisBall > 0) bowlerInc['legByeRunsConceded'] = legByeRunsThisBall;
     const isLegalDelivery = !dto.isWide && !dto.isNoBall;
 
     if (isLegalDelivery) {
@@ -658,7 +664,8 @@ export class ScoreService {
 
     const fields: (keyof SetPlayerScoreDTO)[] = [
       'runs', 'ballsFaced', 'fours', 'sixes', 'isOut', 'dismissalType', 'didNotBat',
-      'wickets', 'oversBowled', 'maidenOvers', 'runsConceded', 'dotBalls', 'lbwBowledCount',
+      'wickets', 'oversBowled', 'maidenOvers', 'runsConceded', 'wideRunsConceded',
+      'noBallRunsConceded', 'legByeRunsConceded', 'dotBalls', 'lbwBowledCount',
       'catches', 'directRunOuts', 'indirectRunOuts', 'stumpings',
       'isPlayerOfMatch', 'isAnnouncedInLineup',
     ];
