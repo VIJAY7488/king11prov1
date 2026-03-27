@@ -158,9 +158,9 @@ export function ContestLivePage() {
   const top3 = useMemo(() => (data?.entries ?? []).slice(0, 3), [data]);
   const myEntry = useMemo(() => (data?.entries ?? []).find((e) => e.isCurrentUser) ?? null, [data]);
   const persistedMatchId = sessionStorage.getItem("selectedMatchId");
-  const contestsBackTo = persistedMatchId
-    ? `/contests?matchId=${encodeURIComponent(persistedMatchId)}`
-    : "/contests";
+  const myContestsBackTo = persistedMatchId
+    ? `/joined-contests?matchId=${encodeURIComponent(persistedMatchId)}`
+    : "/joined-contests";
   const getPotentialByRank = (rank: number): number => {
     if (!prizeTable || rank < 1 || rank > prizeTable.rankPrizes.length) return 0;
     return Number(prizeTable.rankPrizes[rank - 1] ?? 0);
@@ -168,8 +168,8 @@ export function ContestLivePage() {
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-6 pt-6 pb-24 md:pb-8">
-      <button onClick={() => navigate(contestsBackTo)} className="text-sm font-bold text-[#EA4800] mb-4 hover:underline">
-        ← Back to Contests
+      <button onClick={() => navigate(myContestsBackTo)} className="text-sm font-bold text-[#EA4800] mb-4 hover:underline">
+        ← Back to My Contests
       </button>
 
       {loading ? (
