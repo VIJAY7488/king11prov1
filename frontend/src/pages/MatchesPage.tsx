@@ -62,8 +62,8 @@ export function MatchesPage() {
             .filter(Boolean)
         );
         const all: MatchFromApi[] = matchesRes.data?.data?.matches ?? [];
-        const liveJoinedMatches = all.filter((m) => m.status === "LIVE" && joinedIds.has(m.id ?? m._id ?? ""));
-        setMatches(liveJoinedMatches);
+        const completedJoinedMatches = all.filter((m) => m.status === "COMPLETED" && joinedIds.has(m.id ?? m._id ?? ""));
+        setMatches(completedJoinedMatches);
       } catch (err) {
         setError(getErrorMessage(err, "Failed to load matches"));
       } finally {
