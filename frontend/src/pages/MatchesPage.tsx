@@ -92,7 +92,7 @@ export function MatchesPage() {
       return;
     }
 
-    navigate(`/matches/${id}`);
+    navigate(`/joined-contests?matchId=${encodeURIComponent(id)}`);
   }
 
   useEffect(() => {
