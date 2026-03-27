@@ -62,8 +62,8 @@ export function MatchesPage() {
             .filter(Boolean)
         );
         const all: MatchFromApi[] = matchesRes.data?.data?.matches ?? [];
-        const openMatches = all.filter((m) => m.status === "LIVE" || m.status === "UPCOMING");
-        setMatches(openMatches.filter((m) => joinedIds.has(m.id ?? m._id ?? "")));
+        const liveJoinedMatches = all.filter((m) => m.status === "LIVE" && joinedIds.has(m.id ?? m._id ?? ""));
+        setMatches(liveJoinedMatches);
       } catch (err) {
         setError(getErrorMessage(err, "Failed to load matches"));
       } finally {
@@ -185,7 +185,7 @@ export function MatchesPage() {
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-6 pt-6 pb-24 md:pb-8">
-      <h1 className="font-display font-black text-3xl mb-6">🏏 Matches</h1>
+      <h1 className="hidden md:block font-display font-black text-3xl mb-6">🏏 Matches</h1>
 
       <div className="md:hidden mb-5">
         <div className="grid grid-cols-4 gap-2">
