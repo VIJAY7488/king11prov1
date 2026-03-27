@@ -23,6 +23,7 @@ export interface Contest {
 interface ContestCardProps {
   contest: Contest;
   onJoin: (c: Contest) => void;
+  hideLiveActions?: boolean;
 }
 
 interface PrizeDistributionRow {
@@ -59,7 +60,7 @@ const statusStyle = (status: string) => {
   return "bg-[#E8E0D4] text-[#7A6A55] border-[#E8E0D4]";
 };
 
-export function ContestCard({ contest, onJoin }: ContestCardProps) {
+export function ContestCard({ contest, onJoin, hideLiveActions = false }: ContestCardProps) {
   const [guaranteedPrizeTable, setGuaranteedPrizeTable] = useState<ContestPrizeTableResponse | null>(null);
   const [loadingGuaranteedPrize, setLoadingGuaranteedPrize] = useState(false);
 
@@ -78,8 +79,8 @@ export function ContestCard({ contest, onJoin }: ContestCardProps) {
   const isLive = matchStatus === "LIVE";
   const isMatchLocked = matchStatus !== "UPCOMING";
   const isJoinable = contest.status === "OPEN" && available > 0 && !isMatchLocked;
-  const canViewLive = isLive && !["COMPLETED", "CANCELLED"].includes(contestStatus);
-  const canCheckRank = contestStatus === "COMPLETED";
+  const canViewLive = !hideLiveActions && isLive && !["COMPLETED", "CANCELLED"].includes(contestStatus);
+  const canCheckRank = !hideLiveActions && contestStatus === "COMPLETED";
   const isActionable = isJoinable || canViewLive || canCheckRank;
   const displayStatus =
     ["COMPLETED", "CANCELLED"].includes(contestStatus)

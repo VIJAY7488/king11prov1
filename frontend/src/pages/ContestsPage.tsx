@@ -63,16 +63,8 @@ export function ContestsPage() {
     }
 
     const matchStatus = (c.match?.status ?? "UPCOMING").toUpperCase();
-    const contestStatus = (c.status ?? "").toUpperCase();
-    const canViewLive = matchStatus === "LIVE" && !["COMPLETED", "CANCELLED"].includes(contestStatus);
-    const canCheckRank = contestStatus === "COMPLETED";
-
-    if (canViewLive || canCheckRank) {
-      navigate(`/contests/${c.id}/live`);
-      return;
-    }
     if (matchStatus !== "UPCOMING") {
-      toast({ type: "info", icon: "🔒", msg: "Contest is locked because the match is already started." });
+      toast({ type: "info", icon: "ℹ️", msg: "Match is live/completed. Open it from My Contests tab." });
       return;
     }
 
@@ -201,7 +193,7 @@ export function ContestsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {contests.map((c) => (
-            <ContestCard key={c.id} contest={c} onJoin={handleJoin} />
+            <ContestCard key={c.id} contest={c} onJoin={handleJoin} hideLiveActions />
           ))}
         </div>
       )}

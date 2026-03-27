@@ -222,6 +222,10 @@ export function JoinedContestsPage() {
         <div className="space-y-4">
           {sorted.map((item) => {
             const isEditable = item.match?.status === "UPCOMING" && !!item.match;
+            const matchStatus = (item.match?.status ?? "").toUpperCase();
+            const contestStatus = (item.contest?.status ?? "").toUpperCase();
+            const canViewLive = matchStatus === "LIVE" && !["COMPLETED", "CANCELLED"].includes(contestStatus);
+            const canCheckRank = contestStatus === "COMPLETED";
             return (
               <div
                 key={item.entryId}
@@ -237,6 +241,14 @@ export function JoinedContestsPage() {
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => load(true)}>🔄 Rank</Button>
+                    {(canViewLive || canCheckRank) && (
+                      <Button
+                        size="sm"
+                        onClick={() => navigate(`/contests/${item.contest.id}/live`)}
+                      >
+                        {canViewLive ? "View Live" : "Check Rank"}
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant={isEditable ? "default" : "outline"}
