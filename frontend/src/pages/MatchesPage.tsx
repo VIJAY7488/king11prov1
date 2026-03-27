@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
 import { extractLiveUpcomingMatches } from "@/lib/matches";
@@ -16,6 +16,7 @@ interface MatchScoreApiResponse {
 
 export function MatchesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const urlMatchId = searchParams.get("matchId");
   const view = searchParams.get("view");
@@ -162,9 +163,68 @@ export function MatchesPage() {
     return { battingRuns, wickets, overs };
   }
 
+  const contestsTabTo = contextMatchId
+    ? `/contests?matchId=${encodeURIComponent(contextMatchId)}`
+    : "/contests";
+  const myContestsTabTo = contextMatchId
+    ? `/joined-contests?matchId=${encodeURIComponent(contextMatchId)}`
+    : "/joined-contests";
+  const teamsTabTo = contextMatchId
+    ? `/teams?matchId=${encodeURIComponent(contextMatchId)}`
+    : "/teams";
+  const statsTabTo = contextMatchId
+    ? `/matches?view=stats&matchId=${encodeURIComponent(contextMatchId)}`
+    : "/matches?view=stats";
+
+  const mobileTabs = [
+    { label: "Contests", icon: "🏆", to: contestsTabTo, requireAuth: false },
+    { label: "My Contests", icon: "🎯", to: myContestsTabTo, requireAuth: true },
+    { label: "Teams", icon: "👕", to: teamsTabTo, requireAuth: true },
+    { label: "Stats", icon: "📊", to: statsTabTo, requireAuth: false },
+  ];
+
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-6 pt-6 pb-24 md:pb-8">
       <h1 className="hidden md:block font-display font-black text-3xl mb-6">🏏 Matches</h1>
+
+      {isStatsView && (
+        <div className="md:hidden mb-5">
+          <div className="grid grid-cols-4 gap-2">
+            {mobileTabs.map((tab) => {
+              const isActive = tab.label === "Contests"
+                ? location.pathname === "/contests"
+                : tab.label === "My Contests"
+                ? location.pathname === "/joined-contests"
+                : tab.label === "Teams"
+                ? location.pathname === "/teams"
+                : tab.label === "Stats"
+                ? location.pathname === "/matches" && isStatsView
+                : location.pathname === tab.to;
+              return (
+                <button
+                  key={tab.label}
+                  onClick={() => {
+                    if (isActive) return;
+                    if (tab.requireAuth && !token) {
+                      toast({ type: "info", icon: "🔒", msg: "Please login to continue" });
+                      navigate("/login");
+                      return;
+                    }
+                    navigate(tab.to);
+                  }}
+                  className={`flex flex-col items-center gap-1 py-2.5 px-1 rounded-2xl border-[1.5px] transition-all ${isActive
+                    ? "bg-[#EA4800] border-[#EA4800] text-white shadow-[0_4px_14px_rgba(234,72,0,.30)]"
+                    : "bg-white border-[#E8E0D4] text-[#7A6A55] hover:border-[#EA4800] hover:text-[#EA4800]"
+                    }`}
+                >
+                  <span className="text-lg leading-none">{tab.icon}</span>
+                  <span className="text-[0.65rem] font-extrabold leading-none whitespace-nowrap">{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-4">
