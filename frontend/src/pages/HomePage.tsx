@@ -41,7 +41,7 @@ const Homepage = () => {
       if (!token) {
         const contestRes = await api.get("/contests?limit=12");
         const allContests: Contest[] = contestRes.data?.data?.contests ?? [];
-        setMatches(extractLiveUpcomingMatches(allContests).slice(0, 6));
+        setMatches(extractLiveUpcomingMatches(allContests).filter((m) => m.status === "UPCOMING").slice(0, 6));
         setReferralSummary(null);
         hasData = true;
       } else {
@@ -55,7 +55,7 @@ const Homepage = () => {
 
         if (matchRes.status === "fulfilled") {
           const allMatches: MatchFromApi[] = matchRes.value.data?.data?.matches ?? [];
-          setMatches(allMatches.filter((m) => m.status === "LIVE" || m.status === "UPCOMING").slice(0, 6));
+          setMatches(allMatches.filter((m) => m.status === "UPCOMING").slice(0, 6));
           hasData = true;
         } else {
           setMatches([]);
@@ -67,7 +67,7 @@ const Homepage = () => {
         }
 
         if (matchRes.status !== "fulfilled" && allContests.length > 0) {
-          setMatches(extractLiveUpcomingMatches(allContests).slice(0, 6));
+          setMatches(extractLiveUpcomingMatches(allContests).filter((m) => m.status === "UPCOMING").slice(0, 6));
           hasData = true;
         }
 
@@ -137,7 +137,7 @@ const Homepage = () => {
       const now = Date.now();
       return [...matches]
         .filter((m) => {
-          if (m.status === "LIVE") return true; // always show live
+          if (m.status !== "UPCOMING") return false;
           const d = matchDateObj(m);
           if (!d) return false;
           const diff = d.getTime() - now;
@@ -149,10 +149,8 @@ const Homepage = () => {
           return da - db;
         });
     }
-    // "recommended" → show ALL matches, LIVE first then by date
+    // "recommended" → show only upcoming by date
     return [...matches].sort((a, b) => {
-      if (a.status === "LIVE" && b.status !== "LIVE") return -1;
-      if (a.status !== "LIVE" && b.status === "LIVE") return 1;
       const da = matchDateObj(a)?.getTime() ?? Infinity;
       const db = matchDateObj(b)?.getTime() ?? Infinity;
       return da - db;

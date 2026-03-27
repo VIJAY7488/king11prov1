@@ -24,6 +24,7 @@ export function MatchesPage() {
   const token = useAuthStore((s) => s.token);
   const { toast } = useApp();
   const [matches, setMatches] = useState<MatchFromApi[]>([]);
+  const [joinedMatchIds, setJoinedMatchIds] = useState<Set<string>>(new Set());
   const [selectedMatch, setSelectedMatch] = useState<MatchFromApi | null>(null);
   const [team1Scores, setTeam1Scores] = useState<LivePlayerScore[]>([]);
   const [team2Scores, setTeam2Scores] = useState<LivePlayerScore[]>([]);
@@ -48,11 +49,20 @@ export function MatchesPage() {
       }
 
       try {
-        // Fetch all matches — backend doesn't support comma-separated status filter.
-        // Filter LIVE and UPCOMING client-side.
-        const res = await api.get("/matches?limit=50");
-        const all: MatchFromApi[] = res.data?.data?.matches ?? [];
-        setMatches(all.filter((m) => m.status === "LIVE" || m.status === "UPCOMING"));
+        const [matchesRes, joinedRes] = await Promise.all([
+          api.get("/matches?limit=50"),
+          api.get("/users/joined-contests"),
+        ]);
+        const joinedItems: Array<{ match?: { id?: string; _id?: string } }> = joinedRes.data?.data?.contests ?? [];
+        const joinedIds = new Set(
+          joinedItems
+            .map((item) => item.match?.id ?? item.match?._id ?? "")
+            .filter(Boolean)
+        );
+        setJoinedMatchIds(joinedIds);
+        const all: MatchFromApi[] = matchesRes.data?.data?.matches ?? [];
+        const openMatches = all.filter((m) => m.status === "LIVE" || m.status === "UPCOMING");
+        setMatches(openMatches.filter((m) => joinedIds.has(m.id ?? m._id ?? "")));
       } catch (err) {
         setError(getErrorMessage(err, "Failed to load matches"));
       } finally {
@@ -82,6 +92,11 @@ export function MatchesPage() {
       return;
     }
 
+    if (joinedMatchIds.has(id)) {
+      navigate(`/joined-contests?matchId=${encodeURIComponent(id)}`);
+      return;
+    }
+
     navigate(`/matches/${id}`);
   }
 
@@ -100,6 +115,13 @@ export function MatchesPage() {
 
       setScoreLoading(true);
       try {
+        if (joinedMatchIds.has(targetMatchId)) {
+          setSelectedMatch(null);
+          setTeam1Scores([]);
+          setTeam2Scores([]);
+          setScoreLoading(false);
+          return;
+        }
         const [mRes, sRes] = await Promise.all([
           api.get(`/matches/${targetMatchId}`),
           api.get(`/scores/match/${targetMatchId}`).catch(() => null),
@@ -117,7 +139,7 @@ export function MatchesPage() {
       }
     }
     loadScorecard();
-  }, [targetMatchId]);
+  }, [targetMatchId, joinedMatchIds]);
 
   const visibleMatches = targetMatchId
     ? matches.filter((m) => (m.id ?? m._id ?? "") === targetMatchId)
@@ -221,6 +243,17 @@ export function MatchesPage() {
         </div>
       ) : error ? (
         <div className="bg-red-50 text-red-600 p-4 rounded-xl font-bold">{error}</div>
+      ) : targetMatchId && joinedMatchIds.has(targetMatchId) ? (
+        <div className="bg-white border-[1.5px] border-[#E8E0D4] p-6 rounded-2xl text-center">
+          <p className="font-display font-bold text-lg text-[#3D3020] mb-2">This match is in your joined contests</p>
+          <p className="text-[#7A6A55] text-sm mb-4">Stats are hidden in My Matches for joined contests.</p>
+          <button
+            onClick={() => navigate(`/joined-contests?matchId=${encodeURIComponent(targetMatchId)}`)}
+            className="px-4 py-2 rounded-xl bg-[#EA4800] text-white text-sm font-bold hover:bg-[#FF5A1A] transition-all"
+          >
+            Open My Contests
+          </button>
+        </div>
       ) : targetMatchId && (scoreLoading || selectedMatch) ? (
         <div className="space-y-4">
           {scoreLoading ? (
