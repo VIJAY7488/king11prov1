@@ -86,6 +86,7 @@ const buildBallEventId = (dto: BallEventDTO): string => {
     String(dto.ballNumber),
     String(dto.runs),
     String(dto.runsConceded),
+    String(dto.legByeRuns ?? 0),
     String(dto.ballsFaced),
     asBit(dto.isDotBall),
     asBit(dto.isFour),
@@ -510,8 +511,9 @@ export class ScoreService {
 
     // Normalize delivery math defensively so mandatory extras are never lost.
     const batterRunsThisBall = dto.runs + (dto.isOverthrow ? (dto.overthrowRuns ?? 0) : 0);
+    const legByeRunsThisBall = dto.legByeRuns ?? 0;
     const mandatoryExtras = (dto.isWide ? 1 : 0) + (dto.isNoBall ? 1 : 0);
-    const minRunsConceded = batterRunsThisBall + mandatoryExtras;
+    const minRunsConceded = batterRunsThisBall + legByeRunsThisBall + mandatoryExtras;
     const normalizedRunsConceded = Math.max(dto.runsConceded, minRunsConceded);
 
     // ── 1. Batter ─────────────────────────────────────────────────────────

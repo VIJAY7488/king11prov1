@@ -51,6 +51,8 @@ export interface BallEventDTO {
   bowlingPlayerId: string;
   /** All runs conceded on this delivery, including extras. */
   runsConceded: number;
+  /** Leg-bye runs on this delivery (extras, not batter runs). */
+  legByeRuns?:  number;
   isWide:       boolean;
   isNoBall:     boolean;
   /** True when the over completes with 0 runs — send on ball 6 of the over. */

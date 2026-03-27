@@ -24,6 +24,7 @@ export const ballEventSchema = Joi.object({
   // Bowler
   bowlingPlayerId:  Joi.string().required(),
   runsConceded:     Joi.number().integer().min(0).required(),
+  legByeRuns:       Joi.number().integer().min(0).optional(),
   isWide:           Joi.boolean().required(),
   isNoBall:         Joi.boolean().required(),
   isMaiden:         Joi.boolean().optional(),

@@ -86,6 +86,12 @@ export default function AdminScoringPage() {
   // Confirm
   const [confirming, setConfirming] = useState(false);
 
+  const batterRuns = isLegBye ? 0 : runs;
+  const legByeRuns = isLegBye ? runs : 0;
+  const overthrowExtra = isOverthrow ? overthrowRuns : 0;
+  const mandatoryExtras = (isWide ? 1 : 0) + (isNoBall ? 1 : 0);
+  const totalRunsThisBall = batterRuns + legByeRuns + overthrowExtra + mandatoryExtras;
+
   // ── Load match + players ───────────────────────────────────────────────────
 
   async function loadMatch() {
@@ -186,13 +192,15 @@ export default function AdminScoringPage() {
       setError("Load a match and select both a batter and a bowler."); return;
     }
     setSubmitting(true); setError(""); setSuccess("");
-    const batterRuns = isLegBye ? 0 : runs;
-    const legByeRuns = isLegBye ? runs : 0;
     const isDot = !isWide && !isNoBall && batterRuns === 0 && legByeRuns === 0 && !isFour && !isSix;
     const ballsFaced = (isWide || isNoBall) ? 0 : 1;
-    const runsConceded = batterRuns + legByeRuns + (isWide ? 1 : 0) + (isNoBall ? 1 : 0) + (isOverthrow ? overthrowRuns : 0);
+    const runsConceded = Math.max(totalRunsThisBall, mandatoryExtras);
+    const eventId = (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+      ? crypto.randomUUID()
+      : `${match.id}-${over}-${ball}-${Date.now()}`;
 
     const payload: Record<string, unknown> = {
+      eventId,
       matchId:          match.id,
       battingPlayerId:  batter._id,
       bowlingPlayerId:  bowler._id,
@@ -205,6 +213,7 @@ export default function AdminScoringPage() {
       isWide,
       isNoBall,
       runsConceded,
+      legByeRuns,
       isOverthrow,
       overNumber: over,
       ballNumber: ball,
@@ -220,7 +229,7 @@ export default function AdminScoringPage() {
 
     try {
       await api.post("/scores/ball", payload);
-      const desc = `Over ${over}.${ball}: ${batter.name} ${isLegBye ? `${runs} LEG-BYE` : runs}${isFour ? " FOUR" : ""}${isSix ? " SIX" : ""}${isWide ? " WIDE" : ""}${isNoBall ? " NO-BALL" : ""}${isOut ? ` OUT (${dismissalType})` : ""} | Bowl: ${bowler.name}`;
+      const desc = `Over ${over}.${ball}: ${batter.name} ${totalRunsThisBall} run(s)${isLegBye ? ` (${runs} LEG-BYE)` : ""}${isWide ? " [WIDE]" : ""}${isNoBall ? " [NO-BALL]" : ""}${isOut ? ` OUT (${dismissalType})` : ""} | Bowl: ${bowler.name}`;
       setLog((prev) => [desc, ...prev].slice(0, 30));
       setSuccess("✅ Ball submitted!");
       advanceBall();
@@ -574,7 +583,9 @@ export default function AdminScoringPage() {
 
               <div style={{ marginBottom: 12, padding: "8px 10px", background: "#0F0F0F", borderRadius: 8, fontSize: 12, color: "#9CA3AF" }}>
                 <span style={{ fontWeight: 700, color: "#ddd" }}>This ball:</span>{" "}
-                {runs}{isLegBye ? " Leg-bye" : " Run(s)"}
+                {totalRunsThisBall} Total Run(s)
+                {batterRuns > 0 ? ` (${batterRuns} Batter)` : ""}
+                {legByeRuns > 0 ? ` (${legByeRuns} Leg-Bye)` : ""}
                 {isWide ? " + Wide" : ""}
                 {isNoBall ? " + No Ball" : ""}
                 {isOverthrow ? ` + ${overthrowRuns} Overthrow` : ""}
@@ -583,7 +594,7 @@ export default function AdminScoringPage() {
 
               <button onClick={submitBall} disabled={submitting || !batter || !bowler}
                 style={{ width: "100%", height: 52, border: "none", borderRadius: 10, background: (!batter || !bowler) ? "#1A1A1A" : submitting ? "#5A2D00" : "linear-gradient(135deg,#EA4800,#FF5A1A)", color: (!batter || !bowler) ? "#333" : "#fff", fontWeight: 900, fontSize: 16, cursor: (!batter || !bowler) ? "not-allowed" : "pointer" }}>
-                {submitting ? "Submitting..." : (!batter || !bowler) ? "Select batter + bowler first" : `Submit Ball (${runs}${isLegBye ? " LB" : ""}${isWide ? " +WD" : ""}${isNoBall ? " +NB" : ""}${isOut ? " WKT" : ""})`}
+                {submitting ? "Submitting..." : (!batter || !bowler) ? "Select batter + bowler first" : `Submit Ball (${totalRunsThisBall} RUN${totalRunsThisBall === 1 ? "" : "S"}${isWide ? " +WD" : ""}${isNoBall ? " +NB" : ""}${isOut ? " WKT" : ""})`}
               </button>
             </div>
 
