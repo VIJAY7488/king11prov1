@@ -21,6 +21,11 @@ interface JoinedContestItem {
     entryFee: number;
     prizePool: number;
     status: string;
+    filledSpots?: number;
+    totalSpots?: number;
+    availableSpots?: number;
+    fillPercentage?: number;
+    maxEntriesPerUser?: number;
   };
   team: TeamFromApi;
   match?: MatchFromApi;
@@ -52,38 +57,6 @@ export function JoinedContestsPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<JoinedContestItem | null>(null);
   const [showEdit, setShowEdit] = useState(false);
-  const [playerPointsMap, setPlayerPointsMap] = useState<Map<string, number>>(new Map());
-
-
-  const loadLivePlayerPoints = useCallback(async (contests: JoinedContestItem[]) => {
-    const matchIds = [
-      ...new Set(
-        contests
-          .filter((c) => {
-            const status = (c.match?.status ?? "").toUpperCase();
-            return status === "LIVE" || status === "COMPLETED";
-          })
-          .map((c) => c.match?.id)
-          .filter(Boolean)
-      ),
-    ] as string[];
-
-    if (!matchIds.length) { setPlayerPointsMap(new Map()); return; }
-
-    try {
-      const responses = await Promise.all(matchIds.map((id) => api.get(`/scores/match/${id}`)));
-      const next = new Map<string, number>();
-      for (const res of responses) {
-        const all = [...(res.data?.data?.team1 ?? []), ...(res.data?.data?.team2 ?? [])];
-        for (const p of all) {
-          if (p?.playerId) next.set(p.playerId, Number(p.fantasyPoints ?? 0));
-        }
-      }
-      setPlayerPointsMap(next);
-    } catch {
-      // keep existing map on failure
-    }
-  }, []);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -91,13 +64,12 @@ export function JoinedContestsPage() {
       const res = await api.get("/users/joined-contests");
       const contests: JoinedContestItem[] = res.data?.data?.contests ?? [];
       setItems(contests);
-      await loadLivePlayerPoints(contests);
     } catch (err) {
       toast({ type: "error", icon: "❌", msg: getErrorMessage(err, "Failed to load joined contests") });
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [toast, loadLivePlayerPoints]);
+  }, [toast]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -118,6 +90,13 @@ export function JoinedContestsPage() {
       return itemMatchId === targetMatchId;
     });
   }, [items, targetMatchId]);
+
+  function formatPrize(amount: number): string {
+    if (amount >= 1_00_00_000) return `₹${(amount / 1_00_00_000).toFixed(0)} Cr`;
+    if (amount >= 1_00_000) return `₹${(amount / 1_00_000).toFixed(0)}L`;
+    if (amount >= 1_000) return `₹${(amount / 1_000).toFixed(0)}K`;
+    return `₹${amount.toLocaleString("en-IN")}`;
+  }
 
   const mobileTabs = [
     { label: "Contests", icon: "🏆", to: contestTabTo, requireAuth: false },
@@ -226,87 +205,93 @@ export function JoinedContestsPage() {
             const contestStatus = (item.contest?.status ?? "").toUpperCase();
             const canViewLive = matchStatus === "LIVE" && !["COMPLETED", "CANCELLED"].includes(contestStatus);
             const canCheckRank = contestStatus === "COMPLETED";
+            const team1Name = item.match?.team1Name ?? "Team 1";
+            const team2Name = item.match?.team2Name ?? "Team 2";
+            const format = item.match?.format ?? "CRICKET";
+            const filled = Math.max(0, Math.min(100, Number(item.contest.fillPercentage ?? 0)));
+            const totalSpots = Number(item.contest.totalSpots ?? 0);
+            const filledSpots = Number(item.contest.filledSpots ?? 0);
+            const availableSpots = Number(item.contest.availableSpots ?? Math.max(0, totalSpots - filledSpots));
             return (
               <div
                 key={item.entryId}
-                className="bg-white border-[1.5px] border-[#E8E0D4] rounded-2xl overflow-hidden shadow-sm"
-                style={{ borderTopWidth: 3, borderTopColor: "#EA4800" }}
+                className="bg-white rounded-2xl overflow-hidden shadow-sm border-[1.5px] border-[#E8E0D4]"
               >
-                <div className="bg-[#F4F1EC] border-b-[1.5px] border-[#E8E0D4] px-5 py-3.5 flex items-center justify-between">
+                <div className="h-[3px] bg-[#EA4800]" />
+
+                <div className="bg-[#F4F1EC] border-b-[1.5px] border-[#E8E0D4] px-4 py-3 flex items-center justify-between gap-2">
                   <div>
+                    <p className="text-[0.72rem] font-black tracking-wider text-[#7A6A55] uppercase">{format}</p>
                     <p className="font-display font-black text-lg">{item.contest.name}</p>
-                    <p className="text-xs text-[#7A6A55]">
-                      {item.match?.team1Name ?? "Team 1"} vs {item.match?.team2Name ?? "Team 2"} · {item.contest.status}
-                    </p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => load(true)}>🔄 Refresh</Button>
-                    {(canViewLive || canCheckRank) && (
-                      <Button
-                        size="sm"
-                        onClick={() => navigate(`/contests/${item.contest.id}/live`)}
-                      >
-                        View Rank
-                      </Button>
-                    )}
-                    {!(canViewLive || canCheckRank) && (
-                      <Button
-                        size="sm"
-                        variant={isEditable ? "default" : "outline"}
-                        disabled={!isEditable}
-                        onClick={() => {
-                          if (!item.match) return;
-                          setEditing(item);
-                          setShowEdit(true);
-                        }}
-                      >
-                        {isEditable ? "Edit Team" : "Waiting"}
-                      </Button>
-                    )}
-                  </div>
+                  <span className={`text-[0.7rem] font-black px-3 py-1 rounded-full border uppercase tracking-wide ${
+                    matchStatus === "LIVE"
+                      ? "bg-red-100 text-red-700 border-red-200"
+                      : matchStatus === "COMPLETED"
+                      ? "bg-blue-100 text-blue-700 border-blue-200"
+                      : "bg-amber-100 text-amber-700 border-amber-200"
+                  }`}>
+                    {matchStatus}
+                  </span>
                 </div>
 
-                <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="bg-[#FAFAF8] rounded-xl p-3 border border-[#E8E0D4]">
-                    <div className="text-xs text-[#7A6A55] mb-1">Team</div>
-                    <div className="font-bold">{item.team.teamName}</div>
-                  </div>
-                  <div className="bg-[#FFF0EA] rounded-xl p-3 border border-[#FFDDCC]">
-                    <div className="text-xs text-[#7A6A55] mb-1">Live Rank</div>
-                    <div className="font-display font-black text-2xl text-[#EA4800]">
-                      #{item.liveRank > 0 ? item.liveRank : "—"}
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="text-center min-w-[88px]">
+                      <p className="font-display font-black text-lg text-[#1A1208]">{team1Name.split(" ")[0]}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-display font-black text-4xl text-[#D0C3B3] leading-none">VS</p>
+                      <p className="text-[0.8rem] font-bold text-[#7A6A55] mt-1 uppercase tracking-wide">{matchStatus}</p>
+                    </div>
+                    <div className="text-center min-w-[88px]">
+                      <p className="font-display font-black text-lg text-[#1A1208]">{team2Name.split(" ")[0]}</p>
                     </div>
                   </div>
-                  <div className="bg-[#FAFAF8] rounded-xl p-3 border border-[#E8E0D4]">
-                    <div className="text-xs text-[#7A6A55] mb-1">Live Points</div>
-                    <div className="font-display font-black text-2xl">{item.livePoints ?? 0}</div>
-                  </div>
-                  <div className="bg-[#FAFAF8] rounded-xl p-3 border border-[#E8E0D4]">
-                    <div className="text-xs text-[#7A6A55] mb-1">Entry Fee</div>
-                    <div className="font-display font-black text-2xl">
-                      {item.contest.entryFee === 0 ? "FREE" : `₹${item.contest.entryFee}`}
-                    </div>
-                  </div>
-                </div>
 
-                <div className="px-5 pb-5">
-                  <div className="text-xs text-[#7A6A55] font-semibold mb-2">Live Player Points</div>
-                  <div className="flex flex-wrap gap-2">
-                    {(item.team.players ?? []).map((p: any) => {
-                      const pts = playerPointsMap.get(p.playerId) ?? 0;
-                      return (
-                        <div
-                          key={p.playerId}
-                          className="px-2.5 py-1.5 rounded-lg border border-[#E8E0D4] bg-[#FAFAF8] text-xs"
-                        >
-                          <span className="font-bold text-[#1A1208]">{p.playerName}</span>
-                          <span className="text-[#7A6A55]"> · {pts.toFixed(1)} pts</span>
-                          {p.captainRole === "CAPTAIN" && <span className="ml-1 text-yellow-600 font-black">C</span>}
-                          {p.captainRole === "VICE_CAPTAIN" && <span className="ml-1 text-[#EA4800] font-black">VC</span>}
-                        </div>
-                      );
-                    })}
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="rounded-xl border border-[#E8E0D4] bg-[#FAFAF8] p-3">
+                      <p className="text-[0.65rem] uppercase tracking-wide text-[#7A6A55] font-bold">Prize</p>
+                      <p className="font-display font-black text-[#EA4800] text-2xl">{formatPrize(item.contest.prizePool)}</p>
+                    </div>
+                    <div className="rounded-xl border border-[#E8E0D4] bg-[#FAFAF8] p-3">
+                      <p className="text-[0.65rem] uppercase tracking-wide text-[#7A6A55] font-bold">Entry</p>
+                      <p className="font-display font-black text-[#1A1208] text-2xl">{item.contest.entryFee === 0 ? "FREE" : `₹${item.contest.entryFee}`}</p>
+                    </div>
+                    <div className="rounded-xl border border-[#E8E0D4] bg-[#FAFAF8] p-3">
+                      <p className="text-[0.65rem] uppercase tracking-wide text-[#7A6A55] font-bold">Max Teams</p>
+                      <p className="font-display font-black text-[#1A1208] text-2xl">{item.contest.maxEntriesPerUser ?? 1}</p>
+                    </div>
                   </div>
+
+                  <div className="flex items-center justify-between text-[#7A6A55] font-semibold mb-2">
+                    <span>{filled}% filled</span>
+                    <span>{availableSpots} spots left</span>
+                  </div>
+                  <div className="h-3 bg-[#F0EBE1] rounded-full overflow-hidden mb-4">
+                    <div className="h-full bg-[#EA4800]" style={{ width: `${filled}%` }} />
+                  </div>
+
+                  {(canViewLive || canCheckRank) ? (
+                    <button
+                      onClick={() => navigate(`/contests/${item.contest.id}/live`)}
+                      className="w-full rounded-2xl py-3 text-lg font-black bg-gradient-to-br from-[#EA4800] to-[#FF5A1A] text-white"
+                    >
+                      View Rank
+                    </button>
+                  ) : (
+                    <button
+                      disabled={!isEditable}
+                      onClick={() => {
+                        if (!isEditable || !item.match) return;
+                        setEditing(item);
+                        setShowEdit(true);
+                      }}
+                      className={`w-full rounded-2xl py-3 text-lg font-black ${isEditable ? "bg-gradient-to-br from-[#EA4800] to-[#FF5A1A] text-white" : "bg-[#E8E0D4] text-[#7A6A55]"}`}
+                    >
+                      {isEditable ? "Edit Team" : "Locked"}
+                    </button>
+                  )}
                 </div>
               </div>
             );
