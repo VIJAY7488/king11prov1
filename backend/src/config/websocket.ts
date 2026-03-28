@@ -91,7 +91,7 @@ export const attachWebSocketServer = (httpServer: HttpServer): void => {
   });
 
   // JWT auth middleware
-  io.use((socket, next) => {
+  io.use((socket: Socket, next: (err?: Error) => void) => {
     try {
       const user = authFromSocket(socket);
       (socket as AuthedSocket).data.user = user;
@@ -128,7 +128,7 @@ export const attachWebSocketServer = (httpServer: HttpServer): void => {
     console.error('🔴 Failed to subscribe legacy match channels:', err.message);
   });
 
-  io.on('connection', (rawSocket) => {
+  io.on('connection', (rawSocket: Socket) => {
     const socket = rawSocket as AuthedSocket;
 
     socket.emit('connected', {
