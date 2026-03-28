@@ -32,6 +32,7 @@ const matchDateSchema = Joi.string()
 
 export const createMatchSchema = Joi.object({
   league:       Joi.string().trim().max(100).optional(),
+  matchNumber:  Joi.string().trim().max(50).optional(),
   team1Name:    Joi.string().trim().max(100).required(),
   team2Name:    Joi.string().trim().max(100).required(),
   team1Players: squadArray,
@@ -42,6 +43,7 @@ export const createMatchSchema = Joi.object({
 
 export const updateMatchSchema = Joi.object({
   league:       Joi.string().trim().max(100).optional().allow(''),
+  matchNumber:  Joi.string().trim().max(50).optional().allow(''),
   team1Name:    Joi.string().trim().max(100).optional(),
   team2Name:    Joi.string().trim().max(100).optional(),
   team1Players: Joi.array().items(squadPlayerSchema).min(11).max(25).optional(),

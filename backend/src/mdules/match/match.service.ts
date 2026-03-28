@@ -17,15 +17,16 @@ import { Team } from '../team/team.model';
 
 type MatchDocLike = Pick<
   IMatch,
-  'league' | 'team1Name' | 'team2Name' | 'team1Players' | 'team2Players' | 'matchDate' | 'venue' | 'status' | 'createdAt' | 'updatedAt'
+  'league' | 'matchNumber' | 'team1Name' | 'team2Name' | 'team1Players' | 'team2Players' | 'matchDate' | 'venue' | 'status' | 'createdAt' | 'updatedAt'
 > & { _id: Types.ObjectId | string };
 
 const MATCH_PUBLIC_PROJECTION =
-  'league team1Name team2Name team1Players team2Players matchDate venue status createdAt updatedAt';
+  'league matchNumber team1Name team2Name team1Players team2Players matchDate venue status createdAt updatedAt';
 
 const toMatchPublic = (doc: MatchDocLike): MatchPublic => ({
   id:           doc._id.toString(),
   league:       doc.league,
+  matchNumber:  doc.matchNumber,
   team1Name:    doc.team1Name,
   team2Name:    doc.team2Name,
   team1Players: doc.team1Players,
@@ -46,6 +47,7 @@ const assertUniqueSquadPlayerIds = (team1Players: IMatch['team1Players'], team2P
 
 const hasNonStatusUpdates = (dto: UpdateMatchDTO): boolean =>
   dto.league !== undefined ||
+  dto.matchNumber !== undefined ||
   dto.team1Name !== undefined ||
   dto.team2Name !== undefined ||
   dto.team1Players !== undefined ||
@@ -125,6 +127,7 @@ export class MatchService {
 
     const match = await Match.create({
       league:       dto.league,
+      matchNumber:  dto.matchNumber,
       team1Name:    dto.team1Name,
       team2Name:    dto.team2Name,
       team1Players: dto.team1Players,
@@ -171,7 +174,7 @@ export class MatchService {
     }
 
     const fields: (keyof UpdateMatchDTO)[] = [
-      'league', 'team1Name', 'team2Name', 'team1Players', 'team2Players',
+      'league', 'matchNumber', 'team1Name', 'team2Name', 'team1Players', 'team2Players',
       'matchDate', 'venue', 'status',
     ];
     for (const field of fields) {

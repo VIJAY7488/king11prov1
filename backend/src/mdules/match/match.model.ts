@@ -8,6 +8,7 @@ import { PlayerRole } from '../team/team.types';
 
 export interface IMatch extends Document {
   league?: string;
+  matchNumber?: string;
   team1Name: string;
   team2Name: string;
   /** Official squad for team 1 — each element has _id, name, role */
@@ -65,6 +66,12 @@ const matchSchema = new Schema<IMatch, IMatchModel>(
       type: String,
       trim: true,
       maxlength: [100, 'League cannot exceed 100 characters'],
+    },
+
+    matchNumber: {
+      type: String,
+      trim: true,
+      maxlength: [50, 'Match number cannot exceed 50 characters'],
     },
 
     team1Name: {

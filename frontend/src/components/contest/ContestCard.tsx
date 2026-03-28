@@ -74,6 +74,7 @@ export function ContestCard({ contest, onJoin, hideLiveActions = false }: Contes
   const team1Name = m?.team1Name ?? "Team 1";
   const team2Name = m?.team2Name ?? "Team 2";
   const format = m?.format ?? "CRICKET";
+  const matchMeta = [m?.league, m?.matchNumber].filter(Boolean).join(" • ");
   const matchStatus = (m?.status ?? "UPCOMING").toUpperCase();
   const contestStatus = (contest.status ?? "").toUpperCase();
   const isLive = matchStatus === "LIVE";
@@ -141,6 +142,9 @@ export function ContestCard({ contest, onJoin, hideLiveActions = false }: Contes
       <div className="px-4 py-3 bg-[#F4F1EC] border-b border-[#E8E0D4] flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[0.72rem] font-black tracking-wider text-[#7A6A55] uppercase">{format}</p>
+          {matchMeta && (
+            <p className="text-[0.68rem] font-bold text-[#8A7458] truncate">{matchMeta}</p>
+          )}
           <p className="text-sm font-bold text-[#1A1208] truncate">{contest.name}</p>
         </div>
         <span className={`shrink-0 text-[0.65rem] font-black px-2 py-1 rounded-full border uppercase tracking-wide ${statusStyle(displayStatus)}`}>

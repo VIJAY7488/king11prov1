@@ -37,7 +37,7 @@ const CONTEST_PUBLIC_PROJECTION =
   'matchId name contestType entryFee prizePool platformFee totalCollection totalSpots filledSpots maxEntriesPerUser isGuaranteed status description closedAt completedAt cancelledAt cancelReason createdAt updatedAt';
 
 const MATCH_LISTING_PROJECTION =
-  'league team1Name team2Name team1Players team2Players matchDate venue status createdAt updatedAt';
+  'league matchNumber team1Name team2Name team1Players team2Players matchDate venue status createdAt updatedAt';
 
 const JOINED_ENTRY_PROJECTION =
   'contestId teamId joinedAt livePoints liveRank finalPoints finalRank';

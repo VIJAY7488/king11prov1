@@ -7,6 +7,8 @@ export interface MatchPlayer {
 export interface MatchFromApi {
   id: string;   // backend serialises as `id` via toJSON virtuals
   _id?: string; // keep as optional fallback for safety
+  league?: string;
+  matchNumber?: string;
   status: "UPCOMING" | "LIVE" | "COMPLETED" | "CANCELLED";
   team1Name: string;
   team2Name: string;

@@ -83,6 +83,11 @@ export function MatchesPage() {
     return new Date(dateStr).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
   }
 
+  function matchMeta(m: MatchFromApi) {
+    const parts = [m.league, m.matchNumber].filter(Boolean);
+    return parts.join(" • ");
+  }
+
   function handleOpenMatch(m: MatchFromApi) {
     const id = matchId(m);
     if (!id) return;
@@ -250,6 +255,9 @@ export function MatchesPage() {
                 <p className="text-[0.7rem] font-black tracking-wider uppercase text-white/70">
                   {selectedMatch?.status} · {selectedMatch?.format ?? "CRICKET"}
                 </p>
+                {selectedMatch && matchMeta(selectedMatch) && (
+                  <p className="text-[0.72rem] font-bold text-white/75 mt-1">{matchMeta(selectedMatch)}</p>
+                )}
                 <p className="font-display font-black text-xl mt-1">
                   {selectedMatch?.team1Name} vs {selectedMatch?.team2Name}
                 </p>
@@ -370,6 +378,9 @@ export function MatchesPage() {
                   </span>
                 )}
               </div>
+              {matchMeta(m) && (
+                <p className="text-[0.72rem] font-bold text-[#7A6A55] mb-2">{matchMeta(m)}</p>
+              )}
               <div className="flex items-center justify-between mb-2">
                 <div className="font-display font-black text-xl">{m.team1Name}</div>
                 <div className="text-[#B0A090] font-bold text-sm">vs</div>

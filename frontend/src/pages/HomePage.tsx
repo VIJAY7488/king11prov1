@@ -131,6 +131,11 @@ const Homepage = () => {
     return `${remainingMins}m left`;
   };
 
+  const matchMeta = (m: MatchFromApi) => {
+    const parts = [m.league, m.matchNumber].filter(Boolean);
+    return parts.join(" • ");
+  };
+
   const filteredMatches = (() => {
     if (matchFilter === "live-matches") {
       return [...matches]
@@ -413,6 +418,9 @@ const Homepage = () => {
                     </span>
                   )}
                 </div>
+                {matchMeta(m) && (
+                  <p className="text-[0.62rem] font-bold text-[#7A6A55] mb-2 truncate">{matchMeta(m)}</p>
+                )}
 
                 {/* Main row: teams left, date-time + prize right */}
                 <div className="flex items-center justify-between gap-3">
@@ -489,6 +497,9 @@ const Homepage = () => {
                     </span>
                   )}
                 </div>
+                {matchMeta(m) && (
+                  <p className="text-[0.72rem] font-bold text-[#7A6A55] mb-3 truncate">{matchMeta(m)}</p>
+                )}
 
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 min-w-0">
