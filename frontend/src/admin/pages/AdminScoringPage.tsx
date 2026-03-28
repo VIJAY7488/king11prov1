@@ -15,8 +15,8 @@ interface MatchInfo {
   id: string;
   team1Name: string;
   team2Name: string;
-  team1Players: { _id: string; name: string; role: string }[];
-  team2Players: { _id: string; name: string; role: string }[];
+  team1Players: Array<{ _id?: string; name?: string; role?: string } | null | undefined>;
+  team2Players: Array<{ _id?: string; name?: string; role?: string } | null | undefined>;
   status: string;
 }
 
@@ -41,6 +41,23 @@ function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange:
       fontSize: 12, fontWeight: 700, cursor: "pointer",
     }}>{on ? "✓" : "○"} {label}</button>
   );
+}
+
+function normalizeSquadPlayers(
+  rawPlayers: Array<{ _id?: string; name?: string; role?: string } | null | undefined> | undefined,
+  team: "team1" | "team2",
+  teamName: string
+): Player[] {
+  return (rawPlayers ?? [])
+    .filter((player): player is { _id?: string; name?: string; role?: string } => !!player && typeof player === "object")
+    .map((player) => ({
+      _id: typeof player._id === "string" ? player._id.trim() : "",
+      name: typeof player.name === "string" ? player.name.trim() : "",
+      role: typeof player.role === "string" ? player.role.trim() : "",
+      team,
+      teamName,
+    }))
+    .filter((player) => Boolean(player._id && player.name && player.role));
 }
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
@@ -104,10 +121,13 @@ export default function AdminScoringPage() {
       const m: MatchInfo = res.data?.data?.match ?? res.data?.data;
       setMatch(m);
       const all: Player[] = [
-        ...(m.team1Players ?? []).map((p) => ({ ...p, team: "team1" as const, teamName: m.team1Name })),
-        ...(m.team2Players ?? []).map((p) => ({ ...p, team: "team2" as const, teamName: m.team2Name })),
+        ...normalizeSquadPlayers(m.team1Players, "team1", m.team1Name),
+        ...normalizeSquadPlayers(m.team2Players, "team2", m.team2Name),
       ];
       setPlayers(all);
+      if (all.length === 0) {
+        setMatchError("This match has no valid squad players. Update the match squads first.");
+      }
       setBattingTeam("team1");
     } catch (e: any) {
       setMatchError(e?.response?.data?.message ?? "Match not found");
@@ -193,6 +213,9 @@ export default function AdminScoringPage() {
     if (!match || !batter || !bowler) {
       setError("Load a match and select both a batter and a bowler."); return;
     }
+    if (!batter._id || !bowler._id) {
+      setError("Selected batter or bowler is invalid. Reload the match and pick players again."); return;
+    }
     setSubmitting(true); setError(""); setSuccess("");
     const isDot = !isWide && !isNoBall && batterRuns === 0 && legByeRuns === 0 && !isFour && !isSix;
     const ballsFaced = (isWide || isNoBall) ? 0 : 1;
@@ -222,7 +245,7 @@ export default function AdminScoringPage() {
     };
     if (isOut) {
       payload.dismissalType = dismissalType;
-      if (fielder) {
+      if (fielder?._id) {
         payload.fieldingPlayerId = fielder._id;
 
         // Fielding scoring flags derived from dismissal type.
