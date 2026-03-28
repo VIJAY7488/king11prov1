@@ -1,5 +1,12 @@
 import { Document, Model, Schema, Types, model } from 'mongoose';
-import { IAmmState, IResolutionSource, MarketCategoryType, MarketStatus, ResolutionSourceType } from './market.types';
+import {
+  IAmmState,
+  IQuestionPriceConfig,
+  IResolutionSource,
+  MarketCategoryType,
+  MarketStatus,
+  ResolutionSourceType,
+} from './market.types';
 
 
 
@@ -16,6 +23,7 @@ export interface IMarket extends Document {
   resolvedAt: Date | null;
   closeAt: Date;
   createdBy: Types.ObjectId;
+  questionPrice: IQuestionPriceConfig;
   ammState: IAmmState;
   orderBookEnabled: boolean;
   ammEnabled: boolean;
@@ -81,6 +89,25 @@ const resolutionSourceSubSchema = new Schema<IResolutionSource>(
       type: String,
       required: [true, 'Resolution source reference ID is required'],
       trim: true,
+    },
+  },
+  { _id: false }
+);
+
+const questionPriceSubSchema = new Schema<IQuestionPriceConfig>(
+  {
+    amount: {
+      type: Number,
+      required: [true, 'questionPrice.amount is required'],
+      default: 0.5,
+      min: [0, 'questionPrice.amount cannot be negative'],
+    },
+    currency: {
+      type: String,
+      required: [true, 'questionPrice.currency is required'],
+      default: 'INR',
+      trim: true,
+      uppercase: true,
     },
   },
   { _id: false }
@@ -165,6 +192,14 @@ const marketSchema = new Schema<IMarket, IMarketModel>(
       required: [true, 'createdBy is required'],
       ref: 'User',
       index: true,
+    },
+    questionPrice: {
+      type: questionPriceSubSchema as any,
+      required: [true, 'questionPrice is required'],
+      default: {
+        amount: 0.5,
+        currency: 'INR',
+      },
     },
     ammState: {
       type: ammStateSubSchema as any,

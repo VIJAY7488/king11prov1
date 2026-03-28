@@ -13,8 +13,7 @@ class MarketService {
     return new Types.ObjectId(id);
   }
 
-  private deriveAmmStateFromInitialPrice(
-    initialPriceYes: number,
+  private buildNeutralAmmState(
     rawAmmState: unknown
   ): { q_yes: number; q_no: number; b: number; totalLiquidity: number } {
     const ammState =
@@ -30,24 +29,9 @@ class MarketService {
       ? providedBase
       : defaultMid;
 
-    // LMSR price mapping:
-    // p_yes = e^(q_yes / b) / (e^(q_yes / b) + e^(q_no / b))
-    // => (q_yes - q_no) = b * ln(p_yes / (1 - p_yes))
-    const logit = b * Math.log(initialPriceYes / (1 - initialPriceYes));
-    let q_yes = mid + (logit / 2);
-    let q_no = mid - (logit / 2);
-
-    // Keep inventories positive.
-    const minInventory = 1;
-    if (q_yes < minInventory || q_no < minInventory) {
-      const shift = minInventory - Math.min(q_yes, q_no);
-      q_yes += shift;
-      q_no += shift;
-    }
-
     return {
-      q_yes: this.round(q_yes),
-      q_no: this.round(q_no),
+      q_yes: this.round(mid),
+      q_no: this.round(mid),
       b: this.round(b),
       totalLiquidity: this.round(totalLiquidity),
     };
@@ -57,15 +41,8 @@ class MarketService {
     const createdBy = this.toObjectId(adminUserId, 'adminUserId');
     const input: Record<string, unknown> = { ...payload };
 
-    const initialPriceYes = typeof input.initialPriceYes === 'number'
-      ? input.initialPriceYes
-      : undefined;
-
     delete input.initialPriceYes;
-
-    if (typeof initialPriceYes === 'number') {
-      input.ammState = this.deriveAmmStateFromInitialPrice(initialPriceYes, input.ammState);
-    }
+    input.ammState = this.buildNeutralAmmState(input.ammState);
 
     const doc = await Market.create({
       ...input,

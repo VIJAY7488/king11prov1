@@ -10,6 +10,10 @@ interface MarketRow {
   question?: string;
   category?: string;
   status?: string;
+  questionPrice?: {
+    amount?: number;
+    currency?: string;
+  };
   closeAt?: string;
   orderBookEnabled?: boolean;
   ammEnabled?: boolean;
@@ -66,7 +70,8 @@ export default function AdminMarketsPage() {
     slug: "",
     category: "CRICKET",
     status: "OPEN",
-    initialPriceYes: 0.5,
+    questionPrice: 10,
+    questionPriceCurrency: "INR",
     closeAt: "",
     sourceType: "ORACLE" as ResolutionSourceType,
     provider: "cricbuzz",
@@ -102,8 +107,8 @@ export default function AdminMarketsPage() {
   async function createMarket() {
     const question = form.question.trim();
     const slug = (form.slug.trim() || slugify(question)).toLowerCase();
-    if (!Number.isFinite(form.initialPriceYes) || form.initialPriceYes < 0.01 || form.initialPriceYes > 0.99) {
-      setError("Initial YES price must be between 0.01 and 0.99.");
+    if (!Number.isFinite(form.questionPrice) || form.questionPrice < 0) {
+      setError("Question price must be 0 or more.");
       return;
     }
     if (!question || !slug || !form.closeAt || !form.referenceId.trim()) {
@@ -124,7 +129,10 @@ export default function AdminMarketsPage() {
         question,
         category: form.category,
         status: form.status,
-        initialPriceYes: form.initialPriceYes,
+        questionPrice: {
+          amount: Number(form.questionPrice),
+          currency: form.questionPriceCurrency.trim().toUpperCase() || "INR",
+        },
         closeAt: new Date(form.closeAt).toISOString(),
         resolutionSource: {
           type: form.sourceType,
@@ -142,7 +150,8 @@ export default function AdminMarketsPage() {
         slug: "",
         category: "CRICKET",
         status: "OPEN",
-        initialPriceYes: 0.5,
+        questionPrice: 10,
+        questionPriceCurrency: "INR",
         closeAt: "",
         sourceType: "ORACLE",
         provider: "cricbuzz",
@@ -206,14 +215,22 @@ export default function AdminMarketsPage() {
               </select>
             </div>
             <div>
-              <label style={LABEL}>Initial YES Price (0.01 - 0.99)</label>
+              <label style={LABEL}>Question Price</label>
               <input
                 type="number"
-                min={0.01}
-                max={0.99}
+                min={0}
                 step={0.01}
-                value={form.initialPriceYes}
-                onChange={(e) => setF("initialPriceYes", Number(e.target.value))}
+                value={form.questionPrice}
+                onChange={(e) => setF("questionPrice", Number(e.target.value))}
+                style={INPUT}
+              />
+            </div>
+            <div>
+              <label style={LABEL}>Price Currency</label>
+              <input
+                value={form.questionPriceCurrency}
+                onChange={(e) => setF("questionPriceCurrency", e.target.value.toUpperCase())}
+                placeholder="INR"
                 style={INPUT}
               />
             </div>
@@ -273,7 +290,7 @@ export default function AdminMarketsPage() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #1E1E1E" }}>
-                {["Question", "Category", "Status", "Close At", "Tags", "ID"].map((h) => (
+                {["Question", "Price", "Category", "Status", "Close At", "Tags", "ID"].map((h) => (
                   <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, fontWeight: 700, color: "#444", textTransform: "uppercase" }}>{h}</th>
                 ))}
               </tr>
@@ -281,7 +298,7 @@ export default function AdminMarketsPage() {
             <tbody>
               {markets.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: 24, textAlign: "center", color: "#444" }}>
+                  <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "#444" }}>
                     No markets yet
                   </td>
                 </tr>
@@ -289,6 +306,11 @@ export default function AdminMarketsPage() {
               {markets.map((m) => (
                 <tr key={toId(m)} style={{ borderBottom: "1px solid #111" }}>
                   <td style={{ padding: "12px 16px", color: "#ddd", fontSize: 13, fontWeight: 700 }}>{m.question ?? "Untitled"}</td>
+                  <td style={{ padding: "12px 16px", color: "#888", fontSize: 12 }}>
+                    {typeof m.questionPrice?.amount === "number"
+                      ? `${m.questionPrice.currency ?? "INR"} ${m.questionPrice.amount}`
+                      : "-"}
+                  </td>
                   <td style={{ padding: "12px 16px", color: "#888", fontSize: 12 }}>{m.category ?? "-"}</td>
                   <td style={{ padding: "12px 16px", color: "#ddd", fontSize: 12 }}>{m.status ?? "-"}</td>
                   <td style={{ padding: "12px 16px", color: "#888", fontSize: 12 }}>

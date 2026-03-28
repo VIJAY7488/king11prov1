@@ -58,13 +58,15 @@ class SmartRouterService {
     return bestBookPrice >= optionalLimitPrice;
   }
 
-  private isBookBetterThanAmm(
+  private isPriceAcceptableForUser(
     side: OrderSide,
-    bestBookPrice: number | null,
-    ammEffectivePrice: number
+    price: number | null,
+    optionalLimitPrice?: number
   ): boolean {
-    if (bestBookPrice === null) return false;
-    return side === OrderSide.BUY ? bestBookPrice <= ammEffectivePrice : bestBookPrice >= ammEffectivePrice;
+    if (price === null) return false;
+    if (typeof optionalLimitPrice !== 'number') return true;
+    if (side === OrderSide.BUY) return price <= optionalLimitPrice;
+    return price >= optionalLimitPrice;
   }
 
   async execute(userId: string, dto: SmartTradeRequestDTO): Promise<SmartRouteExecutionResult> {
@@ -90,9 +92,7 @@ class SmartRouterService {
         ammQuote ? round(ammQuote.effectivePrice ?? ammQuote.netAmount / dto.quantity) : null;
 
       const bookAcceptable = this.isBookPriceAcceptableForUser(dto.type, bestBookPrice, dto.optionalLimitPrice);
-      const bookBetter = ammEffectivePrice === null
-        ? bookAcceptable
-        : this.isBookBetterThanAmm(dto.type, bestBookPrice, ammEffectivePrice);
+      const ammAcceptable = this.isPriceAcceptableForUser(dto.type, ammEffectivePrice, dto.optionalLimitPrice);
 
       let bookFilledQuantity = 0;
       let ammFilledQuantity = 0;
@@ -102,14 +102,20 @@ class SmartRouterService {
       const targetBookLimit =
         typeof dto.optionalLimitPrice === 'number'
           ? dto.optionalLimitPrice
-          : (ammEffectivePrice ?? bestBookPrice ?? undefined);
+          : dto.type === OrderSide.BUY
+            ? 0.99
+            : 0.01;
+      const bookOrderType =
+        typeof dto.optionalLimitPrice === 'number'
+          ? OrderType.LIMIT
+          : OrderType.MARKET;
 
-      if (bookAcceptable && bookBetter && typeof targetBookLimit === 'number') {
+      if (bookAcceptable && typeof targetBookLimit === 'number') {
         const executableQty = await orderbookService.getExecutableLiquidity(
           dto.marketId,
           orderOutcome,
           dto.type,
-          targetBookLimit
+          bookOrderType === OrderType.LIMIT ? targetBookLimit : undefined
         );
 
         const qtyToBook = Math.min(dto.quantity, executableQty);
@@ -120,7 +126,7 @@ class SmartRouterService {
               marketId: dto.marketId,
               outcome: orderOutcome,
               side: dto.type,
-              orderType: OrderType.LIMIT,
+              orderType: bookOrderType,
               price: targetBookLimit,
               quantity: qtyToBook,
             },
@@ -194,6 +200,50 @@ class SmartRouterService {
           }
 
           throw new AppError('Trade could not execute: orderbook fill unavailable and AMM unavailable.', 409);
+        }
+
+        if (!ammAcceptable) {
+          if (bookFilledQuantity > 0) {
+            return {
+              route: 'ORDER_BOOK',
+              totalQuantity: dto.quantity,
+              bookFilledQuantity,
+              ammFilledQuantity: 0,
+              bookOrderId,
+              estimatedBookPrice: bestBookPrice,
+              estimatedAmmPrice: ammEffectivePrice,
+            };
+          }
+
+          if (typeof dto.optionalLimitPrice === 'number') {
+            const passiveOrder = await orderbookService.placeOrderWithOptions(
+              userId,
+              {
+                marketId: dto.marketId,
+                outcome: orderOutcome,
+                side: dto.type,
+                orderType: OrderType.LIMIT,
+                price: dto.optionalLimitPrice,
+                quantity: remainingQty,
+              },
+              {
+                disableAmmFallback: true,
+                cancelUnfilledRemainder: false,
+              }
+            );
+
+            return {
+              route: 'ORDER_BOOK',
+              totalQuantity: dto.quantity,
+              bookFilledQuantity: bookFilledQuantity + passiveOrder.filledQuantity,
+              ammFilledQuantity: 0,
+              bookOrderId: passiveOrder.orderId,
+              estimatedBookPrice: bestBookPrice ?? dto.optionalLimitPrice,
+              estimatedAmmPrice: ammEffectivePrice,
+            };
+          }
+
+          throw new AppError('Trade could not execute within the requested limit price.', 409);
         }
 
         await riskEngine.preTradeCheck({

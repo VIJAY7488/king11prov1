@@ -47,6 +47,13 @@ const ammStateSchema = Joi.object({
   lastUpdatedAt: Joi.date().iso().optional(),
 });
 
+const questionPriceSchema = Joi.object({
+  amount: Joi.number().min(0).required().messages({
+    'number.min': 'questionPrice.amount cannot be negative',
+  }),
+  currency: Joi.string().trim().uppercase().min(3).max(10).default('INR'),
+});
+
 export const createMarketSchema = Joi.object({
   slug: Joi.string().trim().lowercase().min(3).max(140).required().messages({
     'string.empty': 'Slug is required',
@@ -89,6 +96,11 @@ export const createMarketSchema = Joi.object({
     'any.unknown': 'createdBy is managed by server',
   }),
 
+  questionPrice: questionPriceSchema.default({
+    amount: 0.5,
+    currency: 'INR',
+  }),
+
   ammState: ammStateSchema.default({
     q_yes: 1000,
     q_no: 1000,
@@ -124,6 +136,8 @@ export const updateMarketSchema = Joi.object({
     }),
 
   closeAt: Joi.date().iso().optional(),
+
+  questionPrice: questionPriceSchema.optional(),
 
   orderBookEnabled: Joi.boolean().optional(),
   ammEnabled: Joi.boolean().optional(),

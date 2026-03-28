@@ -39,3 +39,8 @@ export interface IAmmState {
   totalLiquidity: number;
   lastUpdatedAt: Date;
 }
+
+export interface IQuestionPriceConfig {
+  amount: number;
+  currency: string;
+}
