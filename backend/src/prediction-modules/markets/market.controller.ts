@@ -13,6 +13,11 @@ class MarketController {
     res.status(200).json({ status: 'success', data });
   });
 
+  deleteMarket = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const data = await marketService.deleteMarket(req.params.marketId as string);
+    res.status(200).json({ status: 'success', data });
+  });
+
   listMarkets = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const data = await marketService.listMarkets(req.query as any);
     res.status(200).json({ status: 'success', data });

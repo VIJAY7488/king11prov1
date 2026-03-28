@@ -10,6 +10,11 @@ interface MarketRow {
   question?: string;
   category?: string;
   status?: string;
+  resolutionSource?: {
+    type?: ResolutionSourceType;
+    provider?: string;
+    referenceId?: string;
+  };
   questionPrice?: {
     amount?: number;
     currency?: string;
@@ -63,6 +68,8 @@ export default function AdminMarketsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
+  const [editingMarketId, setEditingMarketId] = useState("");
   const [error, setError] = useState("");
 
   const [form, setForm] = useState({
@@ -85,6 +92,25 @@ export default function AdminMarketsPage() {
 
   const setF = (key: string, value: unknown) => setForm((p) => ({ ...p, [key]: value }));
 
+  const resetForm = () => {
+    setForm({
+      question: "",
+      slug: "",
+      category: "CRICKET",
+      status: "OPEN",
+      questionPrice: 10,
+      questionPriceCurrency: "INR",
+      closeAt: "",
+      sourceType: "ORACLE",
+      provider: "cricbuzz",
+      referenceId: "",
+      orderBookEnabled: true,
+      ammEnabled: true,
+      tags: "cricket",
+    });
+    setEditingMarketId("");
+  };
+
   async function loadMarkets() {
     setLoading(true);
     try {
@@ -104,7 +130,34 @@ export default function AdminMarketsPage() {
     loadMarkets();
   }, []);
 
-  async function createMarket() {
+  function startCreate() {
+    resetForm();
+    setError("");
+    setShowForm(true);
+  }
+
+  function startEdit(market: MarketRow) {
+    setEditingMarketId(toId(market));
+    setError("");
+    setShowForm(true);
+    setForm({
+      question: market.question ?? "",
+      slug: market.slug ?? "",
+      category: market.category ?? "CRICKET",
+      status: market.status ?? "OPEN",
+      questionPrice: market.questionPrice?.amount ?? 10,
+      questionPriceCurrency: market.questionPrice?.currency ?? "INR",
+      closeAt: market.closeAt ? new Date(new Date(market.closeAt).getTime() - new Date(market.closeAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
+      sourceType: market.resolutionSource?.type ?? "ORACLE",
+      provider: market.resolutionSource?.provider ?? "cricbuzz",
+      referenceId: market.resolutionSource?.referenceId ?? "",
+      orderBookEnabled: market.orderBookEnabled ?? true,
+      ammEnabled: market.ammEnabled ?? true,
+      tags: (market.tags ?? []).join(", "),
+    });
+  }
+
+  async function submitMarket() {
     const question = form.question.trim();
     const slug = (form.slug.trim() || slugify(question)).toLowerCase();
     if (!Number.isFinite(form.questionPrice) || form.questionPrice < 0) {
@@ -124,7 +177,7 @@ export default function AdminMarketsPage() {
         .map((t) => t.trim())
         .filter(Boolean);
 
-      await api.post("/admin/markets", {
+      const payload = {
         slug,
         question,
         category: form.category,
@@ -142,29 +195,43 @@ export default function AdminMarketsPage() {
         orderBookEnabled: form.orderBookEnabled,
         ammEnabled: form.ammEnabled,
         tags,
-      });
+      };
+
+      if (editingMarketId) {
+        await api.patch(`/admin/markets/${editingMarketId}`, payload);
+      } else {
+        await api.post("/admin/markets", payload);
+      }
 
       setShowForm(false);
-      setForm({
-        question: "",
-        slug: "",
-        category: "CRICKET",
-        status: "OPEN",
-        questionPrice: 10,
-        questionPriceCurrency: "INR",
-        closeAt: "",
-        sourceType: "ORACLE",
-        provider: "cricbuzz",
-        referenceId: "",
-        orderBookEnabled: true,
-        ammEnabled: true,
-        tags: "cricket",
-      });
+      resetForm();
       await loadMarkets();
     } catch (e: any) {
-      setError(e?.response?.data?.message ?? "Failed to create market");
+      setError(e?.response?.data?.message ?? (editingMarketId ? "Failed to update market" : "Failed to create market"));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function deleteMarket(market: MarketRow) {
+    const marketId = toId(market);
+    if (!marketId) return;
+    const confirmed = window.confirm(`Delete question "${market.question ?? "Untitled"}"?`);
+    if (!confirmed) return;
+
+    setDeletingId(marketId);
+    setError("");
+    try {
+      await api.delete(`/admin/markets/${marketId}`);
+      if (editingMarketId === marketId) {
+        setShowForm(false);
+        resetForm();
+      }
+      await loadMarkets();
+    } catch (e: any) {
+      setError(e?.response?.data?.message ?? "Failed to delete market");
+    } finally {
+      setDeletingId("");
     }
   }
 
@@ -176,7 +243,7 @@ export default function AdminMarketsPage() {
           <p style={{ color: "#555", fontSize: 14 }}>Create questions and manage live prediction markets.</p>
         </div>
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => (showForm ? setShowForm(false) : startCreate())}
           style={{ padding: "10px 20px", border: "none", borderRadius: 8, background: "#10B981", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
         >
           {showForm ? "Cancel" : "+ Add Question"}
@@ -191,7 +258,9 @@ export default function AdminMarketsPage() {
 
       {showForm && (
         <div style={{ background: "#141414", border: "1px solid #2A2A2A", borderRadius: 12, padding: 24, marginBottom: 24 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "#ddd", marginBottom: 16 }}>New Market Question</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#ddd", marginBottom: 16 }}>
+            {editingMarketId ? "Edit Market Question" : "New Market Question"}
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             <div style={{ gridColumn: "span 2" }}>
               <label style={LABEL}>Question *</label>
@@ -274,11 +343,11 @@ export default function AdminMarketsPage() {
           </div>
 
           <button
-            onClick={createMarket}
+            onClick={submitMarket}
             disabled={saving}
             style={{ marginTop: 18, padding: "10px 24px", border: "none", borderRadius: 8, background: saving ? "#064E3B" : "#10B981", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}
           >
-            {saving ? "Creating..." : "Create Market →"}
+            {saving ? (editingMarketId ? "Updating..." : "Creating...") : (editingMarketId ? "Update Market →" : "Create Market →")}
           </button>
         </div>
       )}
@@ -290,7 +359,7 @@ export default function AdminMarketsPage() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #1E1E1E" }}>
-                {["Question", "Price", "Category", "Status", "Close At", "Tags", "ID"].map((h) => (
+                {["Question", "Price", "Category", "Status", "Close At", "Tags", "Actions", "ID"].map((h) => (
                   <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, fontWeight: 700, color: "#444", textTransform: "uppercase" }}>{h}</th>
                 ))}
               </tr>
@@ -298,7 +367,7 @@ export default function AdminMarketsPage() {
             <tbody>
               {markets.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "#444" }}>
+                  <td colSpan={8} style={{ padding: 24, textAlign: "center", color: "#444" }}>
                     No markets yet
                   </td>
                 </tr>
@@ -317,6 +386,21 @@ export default function AdminMarketsPage() {
                     {m.closeAt ? new Date(m.closeAt).toLocaleString("en-IN") : "-"}
                   </td>
                   <td style={{ padding: "12px 16px", color: "#888", fontSize: 12 }}>{(m.tags ?? []).join(", ") || "-"}</td>
+                  <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                    <button
+                      onClick={() => startEdit(m)}
+                      style={{ marginRight: 8, padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#1B1B1B", color: "#ddd", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => deleteMarket(m)}
+                      disabled={deletingId === toId(m)}
+                      style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.12)", color: "#FCA5A5", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: deletingId === toId(m) ? 0.7 : 1 }}
+                    >
+                      {deletingId === toId(m) ? "Deleting..." : "Delete"}
+                    </button>
+                  </td>
                   <td
                     style={{ padding: "12px 16px", fontFamily: "monospace", color: "#444", fontSize: 11, cursor: "pointer" }}
                     onClick={() => navigator.clipboard.writeText(toId(m))}

@@ -119,6 +119,11 @@ export const createMarketSchema = Joi.object({
 });
 
 export const updateMarketSchema = Joi.object({
+  slug: Joi.string().trim().lowercase().min(3).max(140).optional().messages({
+    'string.min': 'Slug must be at least 3 characters',
+    'string.max': 'Slug cannot exceed 140 characters',
+  }),
+
   question: Joi.string().trim().min(5).max(300).optional(),
 
   category: Joi.string()

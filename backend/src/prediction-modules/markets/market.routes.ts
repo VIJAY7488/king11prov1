@@ -24,5 +24,12 @@ router.patch(
   validate(updateMarketSchema),
   marketController.updateMarket
 );
+router.delete(
+  '/admin/markets/:marketId',
+  authenticate,
+  requireAdmin,
+  validate(marketIdParamSchema, 'params'),
+  marketController.deleteMarket
+);
 
 export default router;
