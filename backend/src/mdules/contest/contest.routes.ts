@@ -18,6 +18,7 @@ publicContestRouter.post('/contests/prize-table/preview', validate(prizeTablePre
 // Admin routes (auth required)
 publicContestRouter.get('/admin/contests', authenticate, requireAdmin, contestController.adminListContests);
 publicContestRouter.post('/contest', authenticate, validate(createContestSchema), requireAdmin, contestController.adminCreateContest);
+publicContestRouter.patch('/contest/:id', authenticate, validate(updateContestSchema), requireAdmin, contestController.adminUpdateContest);
 publicContestRouter.patch('/update-contest/:id', authenticate, validate(updateContestSchema), requireAdmin, contestController.adminUpdateContest);
 
 export { publicContestRouter };
@@ -35,4 +36,3 @@ export { userContestRouter };
 
 // Default export kept for backward compatibility (not used after routes/index.ts update)
 export default publicContestRouter;
-
