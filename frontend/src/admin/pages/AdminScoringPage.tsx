@@ -212,7 +212,7 @@ export default function AdminScoringPage() {
         setDismissedMap(initialDismissed);
         const t1Selected = all.filter((p) => p.team === "team1" && initialLineup[p._id]).length;
         const t2Selected = all.filter((p) => p.team === "team2" && initialLineup[p._id]).length;
-        const hasCompleteLineup = t1Selected === 11 && t2Selected === 11;
+        const hasCompleteLineup = t1Selected > 0 && t2Selected > 0;
         setLineupSaved(hasCompleteLineup);
         if (hasCompleteLineup) {
           const defaults = pickDefaultsFromPlayers(
@@ -420,17 +420,6 @@ export default function AdminScoringPage() {
   }
 
   function toggleLineupPlayer(player: Player) {
-    const isSelected = Boolean(lineupMap[player._id]);
-    if (!isSelected) {
-      if (player.team === "team1" && team1LineupCount >= 11) {
-        setError("Team 1 already has 11 players selected.");
-        return;
-      }
-      if (player.team === "team2" && team2LineupCount >= 11) {
-        setError("Team 2 already has 11 players selected.");
-        return;
-      }
-    }
     setLineupMap((prev) => ({ ...prev, [player._id]: !prev[player._id] }));
     setLineupSaved(false);
     setError("");
@@ -440,8 +429,8 @@ export default function AdminScoringPage() {
     if (!match) { setError("Load a match first."); return; }
     const matchId = match.id ?? match._id ?? "";
     if (!matchId) { setError("Match ID is missing. Reload match and try again."); return; }
-    if (team1LineupCount !== 11 || team2LineupCount !== 11) {
-      setError("Select exactly 11 players from each team to lock lineup.");
+    if (team1LineupCount < 1 || team2LineupCount < 1) {
+      setError("Select at least 1 player from both teams to save lineup.");
       return;
     }
 
@@ -457,9 +446,9 @@ export default function AdminScoringPage() {
       setLineupSaved(true);
       const sourcePlayers = players.filter((p) => lineupMap[p._id]);
       if (battingTeam) pickDefaultPlayers(battingTeam, sourcePlayers);
-      setSuccess("✅ Playing XI saved. Ball scoring unlocked.");
+      setSuccess("✅ Lineup saved. Ball scoring unlocked.");
     } catch (e: any) {
-      setError(e?.response?.data?.message ?? "Failed to save playing XI lineup.");
+      setError(e?.response?.data?.message ?? "Failed to save lineup.");
     } finally {
       setLineupSaving(false);
     }
@@ -565,13 +554,13 @@ export default function AdminScoringPage() {
       {match && (
         <>
           <div style={S.section}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "#aaa", marginBottom: 12 }}>② Select Playing XI</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#aaa", marginBottom: 12 }}>② Select Lineup</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div style={{ background: "#0F0F0F", border: "1px solid #2A2A2A", borderRadius: 10, padding: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                   <span style={{ color: "#ddd", fontWeight: 800, fontSize: 12 }}>{match.team1Name}</span>
-                  <span style={{ color: team1LineupCount === 11 ? "#10B981" : "#F59E0B", fontWeight: 900, fontSize: 12 }}>
-                    {team1LineupCount}/11
+                  <span style={{ color: team1LineupCount > 0 ? "#10B981" : "#F59E0B", fontWeight: 900, fontSize: 12 }}>
+                    {team1LineupCount}/{team1SquadPlayers.length}
                   </span>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -602,8 +591,8 @@ export default function AdminScoringPage() {
               <div style={{ background: "#0F0F0F", border: "1px solid #2A2A2A", borderRadius: 10, padding: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                   <span style={{ color: "#ddd", fontWeight: 800, fontSize: 12 }}>{match.team2Name}</span>
-                  <span style={{ color: team2LineupCount === 11 ? "#10B981" : "#F59E0B", fontWeight: 900, fontSize: 12 }}>
-                    {team2LineupCount}/11
+                  <span style={{ color: team2LineupCount > 0 ? "#10B981" : "#F59E0B", fontWeight: 900, fontSize: 12 }}>
+                    {team2LineupCount}/{team2SquadPlayers.length}
                   </span>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -635,24 +624,24 @@ export default function AdminScoringPage() {
             <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
               <div style={{ fontSize: 12, color: lineupSaved ? "#10B981" : "#F59E0B", fontWeight: 700 }}>
                 {lineupSaved
-                  ? "Playing XI locked. You can start scoring."
-                  : "Pick exactly 11 players from each team, then click Save Lineup."}
+                  ? "Lineup saved. You can start scoring."
+                  : "Select any players (at least 1 per team), then click Save Lineup."}
               </div>
               <button
                 onClick={saveLineup}
-                disabled={lineupSaving || team1LineupCount !== 11 || team2LineupCount !== 11}
+                disabled={lineupSaving || team1LineupCount < 1 || team2LineupCount < 1}
                 style={{
                   padding: "8px 14px",
                   border: "none",
                   borderRadius: 8,
-                  background: (lineupSaving || team1LineupCount !== 11 || team2LineupCount !== 11) ? "#1A1A1A" : "#10B981",
-                  color: (lineupSaving || team1LineupCount !== 11 || team2LineupCount !== 11) ? "#555" : "#fff",
+                  background: (lineupSaving || team1LineupCount < 1 || team2LineupCount < 1) ? "#1A1A1A" : "#10B981",
+                  color: (lineupSaving || team1LineupCount < 1 || team2LineupCount < 1) ? "#555" : "#fff",
                   fontSize: 12,
                   fontWeight: 800,
-                  cursor: (lineupSaving || team1LineupCount !== 11 || team2LineupCount !== 11) ? "not-allowed" : "pointer",
+                  cursor: (lineupSaving || team1LineupCount < 1 || team2LineupCount < 1) ? "not-allowed" : "pointer",
                 }}
               >
-                {lineupSaving ? "Saving..." : "Save Playing XI"}
+                {lineupSaving ? "Saving..." : "Save Lineup"}
               </button>
             </div>
           </div>
@@ -808,7 +797,7 @@ export default function AdminScoringPage() {
 
               {!lineupSaved && (
                 <div style={{ background: "rgba(245,158,11,.12)", border: "1px solid rgba(245,158,11,.3)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#FCD34D", marginBottom: 12 }}>
-                  Save Playing XI first to unlock ball scoring.
+                  Save lineup first to unlock ball scoring.
                 </div>
               )}
 
@@ -944,7 +933,7 @@ export default function AdminScoringPage() {
 
               <button onClick={submitBall} disabled={!lineupSaved || submitting || !batter || !bowler}
                 style={{ width: "100%", height: 52, border: "none", borderRadius: 10, background: (!batter || !bowler) ? "#1A1A1A" : submitting ? "#5A2D00" : "linear-gradient(135deg,#EA4800,#FF5A1A)", color: (!batter || !bowler) ? "#333" : "#fff", fontWeight: 900, fontSize: 16, cursor: (!batter || !bowler) ? "not-allowed" : "pointer" }}>
-                {submitting ? "Submitting..." : !lineupSaved ? "Save Playing XI First" : (!batter || !bowler) ? "Select batter + bowler first" : `Submit Ball (${totalRunsThisBall} RUN${totalRunsThisBall === 1 ? "" : "S"}${isWide ? " +WD" : ""}${isNoBall ? " +NB" : ""}${isOut ? " WKT" : ""})`}
+                {submitting ? "Submitting..." : !lineupSaved ? "Save Lineup First" : (!batter || !bowler) ? "Select batter + bowler first" : `Submit Ball (${totalRunsThisBall} RUN${totalRunsThisBall === 1 ? "" : "S"}${isWide ? " +WD" : ""}${isNoBall ? " +NB" : ""}${isOut ? " WKT" : ""})`}
               </button>
             </div>
 
