@@ -41,6 +41,12 @@ const Navbar = () => {
       isActive: pathname === "/",
     },
     {
+      to: "/predict",
+      icon: "📈",
+      label: "Predict",
+      isActive: pathname === "/predict" || pathname.startsWith("/predict/"),
+    },
+    {
       to: "/matches",
       icon: "🏏",
       label: "My Matches",

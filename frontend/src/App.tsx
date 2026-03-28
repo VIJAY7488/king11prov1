@@ -47,6 +47,7 @@ const TransactionsPage = lazy(async () => {
   return { default: mod.TransactionsPage };
 });
 const DownloadPage = lazy(() => import("./pages/DownloadPage"));
+const PredictPage = lazy(() => import("./pages/PredictPage"));
 
 const AdminLayout = lazy(() => import("./admin/components/AdminLayout"));
 const AdminLoginPage = lazy(() => import("./admin/pages/AdminLoginPage"));
@@ -132,6 +133,7 @@ function AppLayout() {
             <Route path="/contests"  element={<ContestsPage />} />
             <Route path="/matches"   element={<MatchesPage />} />
             <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+            <Route path="/predict" element={<PredictPage />} />
 
             {/* Protected (user) */}
             <Route path="/profile" element={<AuthRequired><ProfilePage /></AuthRequired>} />
