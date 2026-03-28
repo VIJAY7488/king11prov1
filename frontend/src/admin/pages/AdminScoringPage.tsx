@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/admin/api";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -16,8 +16,8 @@ interface MatchInfo {
   _id?: string;
   team1Name: string;
   team2Name: string;
-  team1Players: Array<{ _id?: string; name?: string; role?: string } | null | undefined>;
-  team2Players: Array<{ _id?: string; name?: string; role?: string } | null | undefined>;
+  team1Players: Array<{ _id?: string; id?: string; playerId?: string; name?: string; role?: string } | null | undefined>;
+  team2Players: Array<{ _id?: string; id?: string; playerId?: string; name?: string; role?: string } | null | undefined>;
   status: string;
 }
 
@@ -45,20 +45,52 @@ function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange:
 }
 
 function normalizeSquadPlayers(
-  rawPlayers: Array<{ _id?: string; name?: string; role?: string } | null | undefined> | undefined,
+  rawPlayers: Array<{ _id?: string; id?: string; playerId?: string; name?: string; role?: string } | null | undefined> | undefined,
   team: "team1" | "team2",
   teamName: string
 ): Player[] {
+  const seen = new Set<string>();
   return (rawPlayers ?? [])
-    .filter((player): player is { _id?: string; name?: string; role?: string } => !!player && typeof player === "object")
+    .filter((player): player is { _id?: string; id?: string; playerId?: string; name?: string; role?: string } => !!player && typeof player === "object")
     .map((player) => ({
-      _id: typeof player._id === "string" ? player._id.trim() : "",
+      _id:
+        (typeof player._id === "string" && player._id.trim()) ||
+        (typeof player.id === "string" && player.id.trim()) ||
+        (typeof player.playerId === "string" && player.playerId.trim()) ||
+        "",
       name: typeof player.name === "string" ? player.name.trim() : "",
-      role: typeof player.role === "string" ? player.role.trim() : "",
+      role: typeof player.role === "string" ? player.role.trim().toUpperCase() : "",
       team,
       teamName,
     }))
-    .filter((player) => Boolean(player._id && player.name && player.role));
+    .filter((player) => {
+      if (!player._id || !player.name || !player.role) return false;
+      const key = `${team}:${player._id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function preferredPlayer(players: Player[], roles: string[]): Player | null {
+  for (const role of roles) {
+    const found = players.find((p) => p.role === role);
+    if (found) return found;
+  }
+  return players[0] ?? null;
+}
+
+function pickDefaultsFromPlayers(players: Player[], team: "team1" | "team2"): {
+  batter: Player | null;
+  bowler: Player | null;
+  fielder: Player | null;
+} {
+  const bat = players.filter((p) => p.team === team);
+  const bowl = players.filter((p) => p.team !== team);
+  const batter = preferredPlayer(bat, ["BATSMAN", "WICKET_KEEPER", "ALL_ROUNDER"]);
+  const bowler = preferredPlayer(bowl, ["BOWLER", "ALL_ROUNDER", "BATSMAN"]);
+  const fielder = bowler;
+  return { batter, bowler, fielder };
 }
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
@@ -117,6 +149,7 @@ export default function AdminScoringPage() {
     if (!matchIdInput.trim()) { setMatchError("Enter a Match ID"); return; }
     setLoadingMatch(true); setMatchError(""); setMatch(null); setPlayers([]);
     setBatter(null); setBowler(null); setFielder(null);
+    setBatterSearch(""); setBowlerSearch(""); setFielderSearch("");
     try {
       const res = await api.get(`/matches/${matchIdInput.trim()}`);
       const m: MatchInfo = res.data?.data?.match ?? res.data?.data;
@@ -128,8 +161,14 @@ export default function AdminScoringPage() {
       setPlayers(all);
       if (all.length === 0) {
         setMatchError("This match has no valid squad players. Update the match squads first.");
+        setBattingTeam(null);
+      } else {
+        setBattingTeam("team1");
+        const defaults = pickDefaultsFromPlayers(all, "team1");
+        setBatter(defaults.batter);
+        setBowler(defaults.bowler);
+        setFielder(defaults.fielder);
       }
-      setBattingTeam("team1");
     } catch (e: any) {
       setMatchError(e?.response?.data?.message ?? "Match not found");
     } finally { setLoadingMatch(false); }
@@ -310,13 +349,10 @@ export default function AdminScoringPage() {
   const filteredFieldingPlayers = bowlingPlayers.filter((p) => p.name.toLowerCase().includes(fielderSearch.toLowerCase()));
 
   function pickDefaultPlayers(team: "team1" | "team2") {
-    const bat = players.filter((p) => p.team === team);
-    const bowl = players.filter((p) => p.team !== team);
-    const defaultBatter = bat.find((p) => p.role === "BATSMAN") ?? bat.find((p) => p.role === "WICKET_KEEPER") ?? bat[0] ?? null;
-    const defaultBowler = bowl.find((p) => p.role === "BOWLER") ?? bowl.find((p) => p.role === "ALL_ROUNDER") ?? bowl[0] ?? null;
-    setBatter(defaultBatter);
-    setBowler(defaultBowler);
-    setFielder(defaultBowler);
+    const defaults = pickDefaultsFromPlayers(players, team);
+    setBatter(defaults.batter);
+    setBowler(defaults.bowler);
+    setFielder(defaults.fielder);
   }
 
   function switchBattingTeam(team: "team1" | "team2") {
@@ -326,6 +362,22 @@ export default function AdminScoringPage() {
     setFielderSearch("");
     pickDefaultPlayers(team);
   }
+
+  useEffect(() => {
+    if (!battingTeam) return;
+    const validBatters = players.filter((p) => p.team === battingTeam);
+    const validBowlers = players.filter((p) => p.team !== battingTeam);
+
+    if (!batter || !validBatters.some((p) => p._id === batter._id)) {
+      setBatter(preferredPlayer(validBatters, ["BATSMAN", "WICKET_KEEPER", "ALL_ROUNDER"]));
+    }
+    if (!bowler || !validBowlers.some((p) => p._id === bowler._id)) {
+      setBowler(preferredPlayer(validBowlers, ["BOWLER", "ALL_ROUNDER", "BATSMAN"]));
+    }
+    if (fielder && !validBowlers.some((p) => p._id === fielder._id)) {
+      setFielder(null);
+    }
+  }, [players, battingTeam, batter, bowler, fielder]);
 
   return (
     <div style={{ padding: "28px 32px", maxWidth: 1200 }}>
@@ -413,7 +465,7 @@ export default function AdminScoringPage() {
                 <select
                   value={batter?._id ?? ""}
                   onChange={(e) => {
-                    const p = players.find((x) => x._id === e.target.value) ?? null;
+                    const p = battingPlayers.find((x) => x._id === e.target.value) ?? null;
                     setBatter(p);
                   }}
                   style={{ ...S.input, appearance: "none" as const }}
@@ -455,7 +507,7 @@ export default function AdminScoringPage() {
                 <select
                   value={bowler?._id ?? ""}
                   onChange={(e) => {
-                    const p = players.find((x) => x._id === e.target.value) ?? null;
+                    const p = bowlingPlayers.find((x) => x._id === e.target.value) ?? null;
                     setBowler(p);
                   }}
                   style={{ ...S.input, appearance: "none" as const }}
@@ -497,7 +549,7 @@ export default function AdminScoringPage() {
                 <select
                   value={fielder?._id ?? ""}
                   onChange={(e) => {
-                    const p = players.find((x) => x._id === e.target.value) ?? null;
+                    const p = bowlingPlayers.find((x) => x._id === e.target.value) ?? null;
                     setFielder(p);
                   }}
                   style={{ ...S.input, appearance: "none" as const }}
