@@ -12,9 +12,9 @@ type UiOrderType = "MARKET" | "LIMIT";
 interface MarketItem {
   id?: string;
   _id?: string;
-  question: string;
-  status: string;
-  closeAt: string;
+  question?: string;
+  status?: string;
+  closeAt?: string;
 }
 
 interface BookRow {
@@ -23,6 +23,34 @@ interface BookRow {
 }
 
 const marketIdOf = (m?: MarketItem | null): string => (m?.id ?? m?._id ?? "");
+
+const normalizeMarkets = (raw: unknown): MarketItem[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((row): row is Record<string, unknown> => !!row && typeof row === "object")
+    .map((row) => ({
+      id: typeof row.id === "string" ? row.id : undefined,
+      _id: typeof row._id === "string" ? row._id : undefined,
+      question: typeof row.question === "string" ? row.question : "Untitled Market",
+      status: typeof row.status === "string" ? row.status : undefined,
+      closeAt: typeof row.closeAt === "string" ? row.closeAt : undefined,
+    }))
+    .filter((row) => !!marketIdOf(row));
+};
+
+const normalizeBookRows = (raw: unknown): BookRow[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((row): row is Record<string, unknown> => !!row && typeof row === "object")
+    .map((row) => {
+      const priceRaw = row.price;
+      const quantityRaw = row.quantity ?? row.qty;
+      const price = typeof priceRaw === "number" ? priceRaw : Number(priceRaw);
+      const quantity = typeof quantityRaw === "number" ? quantityRaw : Number(quantityRaw);
+      return { price, quantity };
+    })
+    .filter((row) => Number.isFinite(row.price) && Number.isFinite(row.quantity) && row.price >= 0 && row.quantity >= 0);
+};
 
 export default function PredictPage() {
   const navigate = useNavigate();
@@ -64,8 +92,7 @@ export default function PredictPage() {
           params: { status: "OPEN", page: 1, limit: 20, sortBy: "closeAt", sortOrder: "asc" },
           cache: { ttlMs: 15_000, key: "predict-markets" },
         });
-        const rowsRaw = res.data?.data?.markets;
-        const rows: MarketItem[] = Array.isArray(rowsRaw) ? rowsRaw : [];
+        const rows = normalizeMarkets(res.data?.data?.markets);
         if (!active) return;
         setMarkets(rows);
         setSelectedMarketId((prev) => {
@@ -102,8 +129,8 @@ export default function PredictPage() {
           cache: { ttlMs: 4_000, key: `predict-book:${selectedMarketId}:${side}` },
         });
         if (!active) return;
-        setBids(res.data?.data?.buys ?? []);
-        setAsks(res.data?.data?.sells ?? []);
+        setBids(normalizeBookRows(res.data?.data?.buys));
+        setAsks(normalizeBookRows(res.data?.data?.sells));
       } catch (err) {
         if (!active) return;
         setBids([]);
@@ -153,8 +180,8 @@ export default function PredictPage() {
         params: { outcome: side, depth: 10 },
         cache: false,
       });
-      setBids(bookRes.data?.data?.buys ?? []);
-      setAsks(bookRes.data?.data?.sells ?? []);
+      setBids(normalizeBookRows(bookRes.data?.data?.buys));
+      setAsks(normalizeBookRows(bookRes.data?.data?.sells));
     } catch (err) {
       toast({ type: "error", icon: "❌", msg: getErrorMessage(err, "Trade execution failed") });
     } finally {
@@ -194,11 +221,11 @@ export default function PredictPage() {
             {!loadingMarkets && markets.length === 0 && <option>No open markets</option>}
             {markets.map((m) => (
               <option key={marketIdOf(m)} value={marketIdOf(m)}>
-                {m.question}
+                {m.question ?? "Untitled Market"}
               </option>
             ))}
           </select>
-          {selectedMarket?.closeAt && (
+          {selectedMarket?.closeAt && Number.isFinite(new Date(selectedMarket.closeAt).getTime()) && (
             <p className="mt-1 text-[11px] text-[#7A6A55]">
               Closes: {new Date(selectedMarket.closeAt).toLocaleString("en-IN")}
             </p>
