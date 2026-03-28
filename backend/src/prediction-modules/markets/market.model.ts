@@ -61,6 +61,31 @@ const ammStateSubSchema = new Schema(
   { _id: false }
 );
 
+const resolutionSourceSubSchema = new Schema<IResolutionSource>(
+  {
+    type: {
+      type: String,
+      enum: {
+        values: Object.values(ResolutionSourceType),
+        message: `Resolution source type must be one of: ${Object.values(ResolutionSourceType).join(', ')}`,
+      },
+      required: [true, 'Resolution source type is required'],
+      default: ResolutionSourceType.ORACLE,
+    },
+    provider: {
+      type: String,
+      required: [true, 'Resolution source provider is required'],
+      trim: true,
+    },
+    referenceId: {
+      type: String,
+      required: [true, 'Resolution source reference ID is required'],
+      trim: true,
+    },
+  },
+  { _id: false }
+);
+
 const marketSchema = new Schema<IMarket, IMarketModel>(
   {
     slug: {
@@ -110,27 +135,7 @@ const marketSchema = new Schema<IMarket, IMarketModel>(
       },
     },
     resolutionSource: {
-      type: {
-        type: {
-          type: String,
-          enum: {
-            values: Object.values(ResolutionSourceType),
-            message: `Resolution source type must be one of: ${Object.values(ResolutionSourceType).join(', ')}`,
-          },
-          required: [true, 'Resolution source type is required'],
-          default: ResolutionSourceType.ORACLE,
-        },
-        provider: {
-          type: String,
-          required: [true, 'Resolution source provider is required'],
-          trim: true,
-        },
-        referenceId: {
-          type: String,
-          required: [true, 'Resolution source reference ID is required'],
-          trim: true,
-        },
-      },
+      type: resolutionSourceSubSchema as any,
       required: [true, 'Resolution source is required'],
       default: {
         type: ResolutionSourceType.ORACLE,
