@@ -17,5 +17,5 @@ export interface SmartRouteExecutionResult {
   bookOrderId?: string;
   ammTradeId?: string;
   estimatedBookPrice?: number | null;
-  estimatedAmmPrice: number;
+  estimatedAmmPrice: number | null;
 }

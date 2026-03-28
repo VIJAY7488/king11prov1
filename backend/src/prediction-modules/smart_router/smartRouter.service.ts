@@ -77,13 +77,22 @@ class SmartRouterService {
       const orderOutcome = this.toOrderOutcome(dto.outcome);
       const ammAction = this.toAmmAction(dto.type);
 
-      const [bestBookPrice, ammQuote] = await Promise.all([
-        orderbookService.getBestPrice(dto.marketId, orderOutcome, dto.type),
-        ammService.getQuote(dto.marketId, dto.outcome, ammAction, dto.quantity),
-      ]);
+      const bestBookPrice = await orderbookService.getBestPrice(dto.marketId, orderOutcome, dto.type);
+      let ammQuote: Awaited<ReturnType<typeof ammService.getQuote>> | null = null;
+      let ammQuoteError: unknown = null;
+      try {
+        ammQuote = await ammService.getQuote(dto.marketId, dto.outcome, ammAction, dto.quantity);
+      } catch (error) {
+        ammQuoteError = error;
+      }
+
+      const ammEffectivePrice =
+        ammQuote ? round(ammQuote.effectivePrice ?? ammQuote.netAmount / dto.quantity) : null;
 
       const bookAcceptable = this.isBookPriceAcceptableForUser(dto.type, bestBookPrice, dto.optionalLimitPrice);
-      const bookBetter = this.isBookBetterThanAmm(dto.type, bestBookPrice, ammQuote.effectivePrice ?? ammQuote.netAmount / dto.quantity);
+      const bookBetter = ammEffectivePrice === null
+        ? bookAcceptable
+        : this.isBookBetterThanAmm(dto.type, bestBookPrice, ammEffectivePrice);
 
       let bookFilledQuantity = 0;
       let ammFilledQuantity = 0;
@@ -93,9 +102,9 @@ class SmartRouterService {
       const targetBookLimit =
         typeof dto.optionalLimitPrice === 'number'
           ? dto.optionalLimitPrice
-          : (ammQuote.effectivePrice ?? ammQuote.netAmount / dto.quantity);
+          : (ammEffectivePrice ?? bestBookPrice ?? undefined);
 
-      if (bookAcceptable && bookBetter) {
+      if (bookAcceptable && bookBetter && typeof targetBookLimit === 'number') {
         const executableQty = await orderbookService.getExecutableLiquidity(
           dto.marketId,
           orderOutcome,
@@ -127,6 +136,25 @@ class SmartRouterService {
 
       const remainingQty = dto.quantity - bookFilledQuantity;
       if (remainingQty > 0) {
+        if (!ammQuote) {
+          if (bookFilledQuantity > 0) {
+            return {
+              route: 'ORDER_BOOK',
+              totalQuantity: dto.quantity,
+              bookFilledQuantity,
+              ammFilledQuantity: 0,
+              bookOrderId,
+              estimatedBookPrice: bestBookPrice,
+              estimatedAmmPrice: null,
+            };
+          }
+
+          if (ammQuoteError instanceof Error) {
+            throw ammQuoteError;
+          }
+          throw new AppError('No executable liquidity in orderbook and AMM is unavailable.', 409);
+        }
+
         await riskEngine.preTradeCheck({
           marketId: dto.marketId,
           userId,
@@ -163,7 +191,7 @@ class SmartRouterService {
         bookOrderId,
         ammTradeId,
         estimatedBookPrice: bestBookPrice,
-        estimatedAmmPrice: round(ammQuote.effectivePrice ?? ammQuote.netAmount / dto.quantity),
+        estimatedAmmPrice: ammEffectivePrice,
       };
     } finally {
       await this.releaseLock(dto.marketId, dto.outcome, lockToken);
