@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { api } from "@/admin/api";
+import { getEntityId } from "@/lib/id";
 
 interface Contest {
-  id: string;
+  id?: string;
+  _id?: string;
   name: string;
   contestType: string;
   description?: string;
@@ -15,6 +17,8 @@ interface Contest {
   isGuaranteed: boolean;
   matchId: string;
 }
+
+const toContestId = (contest: Contest | null | undefined): string => getEntityId(contest);
 
 const STATUS_COLOR: Record<string, string> = {
   DRAFT: "#6B7280", OPEN: "#10B981", FULL: "#3B82F6", CLOSED: "#F59E0B", COMPLETED: "#8B5CF6", CANCELLED: "#EF4444",
@@ -125,7 +129,12 @@ export default function AdminContestsPage() {
   }
 
   function startEdit(contest: Contest) {
-    setEditingId(contest.id);
+    const contestId = toContestId(contest);
+    if (!contestId) {
+      setError("Invalid contest ID.");
+      return;
+    }
+    setEditingId(contestId);
     setForm({
       matchId: contest.matchId ?? "",
       name: contest.name ?? "",
@@ -313,8 +322,10 @@ export default function AdminContestsPage() {
             </thead>
             <tbody>
               {contests.length === 0 && <tr><td colSpan={8} style={{ padding: 24, textAlign: "center", color: "#444" }}>No contests yet</td></tr>}
-              {contests.map((c) => (
-                <tr key={c.id} style={{ borderBottom: "1px solid #111" }}>
+              {contests.map((c, idx) => {
+                const contestId = toContestId(c);
+                return (
+                <tr key={contestId || `${c.name}-${idx}`} style={{ borderBottom: "1px solid #111" }}>
                   <td style={{ padding: "12px 16px" }}>
                     <div style={{ fontWeight: 700, color: "#ddd", fontSize: 13 }}>{c.name}</div>
                     {c.isGuaranteed && <div style={{ fontSize: 11, color: "#10B981" }}>✅ Guaranteed</div>}
@@ -329,8 +340,8 @@ export default function AdminContestsPage() {
                     </span>
                   </td>
                   <td style={{ padding: "12px 16px", fontFamily: "monospace", color: "#444", fontSize: 11, cursor: "pointer" }}
-                    onClick={() => navigator.clipboard.writeText(c.id ?? "")}>
-                    {(c.id ?? "").slice(-8)} 📋
+                    onClick={() => navigator.clipboard.writeText(contestId)}>
+                    {(contestId ?? "").slice(-8)} 📋
                   </td>
                   <td style={{ padding: "12px 16px" }}>
                     <button
@@ -351,7 +362,7 @@ export default function AdminContestsPage() {
                     </button>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>

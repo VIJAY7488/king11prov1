@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "@/admin/api";
+import { getEntityId } from "@/lib/id";
 
 interface Match {
-  id: string;
+  id?: string;
   _id?: string;
   name?: string;
   league?: string;
@@ -14,6 +15,8 @@ interface Match {
   matchDate: string;
   venue: string;
 }
+
+const toMatchId = (match: Match | null | undefined): string => getEntityId(match);
 
 interface PlayerEntry {
   _id: string;
@@ -317,7 +320,7 @@ export default function AdminMatchesPage() {
         ? new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
         : "";
 
-      setEditingId(m.id ?? m._id ?? matchId);
+      setEditingId(toMatchId(m) || matchId);
       setForm({
         league: m.league ?? "",
         matchNumber: m.matchNumber ?? "",
@@ -433,8 +436,10 @@ export default function AdminMatchesPage() {
             </thead>
             <tbody>
               {matches.length === 0 && <tr><td colSpan={8} style={{ padding: 24, textAlign: "center", color: "#444" }}>No matches yet</td></tr>}
-              {matches.map((m) => (
-                <tr key={m.id} style={{ borderBottom: "1px solid #111" }}>
+              {matches.map((m, idx) => {
+                const matchId = toMatchId(m);
+                return (
+                <tr key={matchId || `${m.team1Name}-${m.team2Name}-${idx}`} style={{ borderBottom: "1px solid #111" }}>
                   <td style={{ padding: "12px 16px", color: "#aaa", fontSize: 12 }}>{m.league || "—"}</td>
                   <td style={{ padding: "12px 16px", color: "#aaa", fontSize: 12 }}>{m.matchNumber || "—"}</td>
                   <td style={{ padding: "12px 16px" }}>
@@ -449,12 +454,12 @@ export default function AdminMatchesPage() {
                   </td>
                   <td style={{ padding: "12px 16px", fontFamily: "monospace", color: "#444", fontSize: 11, cursor: "pointer" }}
                     title="Click to copy ID"
-                    onClick={() => { navigator.clipboard.writeText(m.id ?? ""); }}>
-                    {(m.id ?? "").slice(-8)} 📋
+                    onClick={() => { navigator.clipboard.writeText(matchId); }}>
+                    {(matchId ?? "").slice(-8)} 📋
                   </td>
                   <td style={{ padding: "12px 16px" }}>
                     <button
-                      onClick={() => startEdit(m.id ?? m._id ?? "")}
+                      onClick={() => startEdit(matchId)}
                       disabled={m.status !== "UPCOMING"}
                       title={m.status !== "UPCOMING" ? "Only UPCOMING matches can be edited" : "Edit match"}
                       style={{
@@ -472,7 +477,7 @@ export default function AdminMatchesPage() {
                     </button>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>

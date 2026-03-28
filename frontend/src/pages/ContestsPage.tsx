@@ -6,6 +6,7 @@ import { trackEvent } from "@/lib/analytics";
 import { useApp } from "@/context/AppContext";
 import { useAuthStore } from "@/store/authStore";
 import { ContestCard, type Contest } from "@/components/contest/ContestCard";
+import { getEntityId } from "@/lib/id";
 
 export function ContestsPage() {
   const navigate = useNavigate();
@@ -50,11 +51,19 @@ export function ContestsPage() {
   }, [urlMatchId]);
 
   async function handleJoin(c: Contest) {
+    const contestId = getEntityId(c as Contest & { _id?: string });
+    const contestMatchId = c.matchId ?? c.match?.id ?? c.match?._id ?? "";
+
     trackEvent("view_contest", {
-      contest_id: c.id,
-      match_id: c.matchId,
+      contest_id: contestId,
+      match_id: contestMatchId,
       contest_status: c.status,
     });
+
+    if (!contestId) {
+      toast({ type: "error", icon: "❌", msg: "Contest ID is missing. Please refresh and try again." });
+      return;
+    }
 
     if (!token) {
       toast({ type: "info", icon: "🔒", msg: "Please login to join a contest" });
@@ -72,10 +81,10 @@ export function ContestsPage() {
       if (joining) return;
       setJoining(true);
       try {
-        const res = await api.post("/users/join-contest", { contestId: c.id, teamId: urlTeamId });
+        const res = await api.post("/users/join-contest", { contestId, teamId: urlTeamId });
         trackEvent("join_contest", {
-          contest_id: c.id,
-          match_id: c.matchId,
+          contest_id: contestId,
+          match_id: contestMatchId,
           source: "contests_with_team",
         });
         toast({ type: "success", icon: "🎉", msg: res.data?.data?.message ?? "Successfully joined contest!" });
@@ -92,7 +101,7 @@ export function ContestsPage() {
       return;
     }
 
-    navigate(`/teams?matchId=${c.matchId}&contestId=${c.id}`);
+    navigate(`/teams?matchId=${contestMatchId}&contestId=${contestId}`);
   }
 
   const contestTargetMatchId = urlMatchId ?? persistedMatchId;
@@ -192,9 +201,12 @@ export function ContestsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {contests.map((c) => (
-            <ContestCard key={c.id} contest={c} onJoin={handleJoin} hideLiveActions />
-          ))}
+          {contests.map((c, idx) => {
+            const contestId = getEntityId(c as Contest & { _id?: string });
+            return (
+              <ContestCard key={contestId || `${c.name}-${idx}`} contest={c} onJoin={handleJoin} hideLiveActions />
+            );
+          })}
         </div>
       )}
     </div>

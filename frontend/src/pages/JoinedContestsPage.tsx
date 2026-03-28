@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { CreateTeamModal } from "@/components/createteam/CreateTeamModal";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
+import { getEntityId } from "@/lib/id";
 
 interface JoinedContestItem {
   entryId: string;
@@ -16,7 +17,8 @@ interface JoinedContestItem {
   finalPoints: number;
   finalRank: number;
   contest: {
-    id: string;
+    id?: string;
+    _id?: string;
     name: string;
     entryFee: number;
     prizePool: number;
@@ -200,6 +202,7 @@ export function JoinedContestsPage() {
       ) : (
         <div className="space-y-4">
           {sorted.map((item) => {
+            const contestId = getEntityId(item.contest);
             const isEditable = item.match?.status === "UPCOMING" && !!item.match;
             const matchStatus = (item.match?.status ?? "").toUpperCase();
             const contestStatus = (item.contest?.status ?? "").toUpperCase();
@@ -274,7 +277,13 @@ export function JoinedContestsPage() {
 
                   {(canViewLive || canCheckRank) ? (
                     <button
-                      onClick={() => navigate(`/contests/${item.contest.id}/live`)}
+                      onClick={() => {
+                        if (!contestId) {
+                          toast({ type: "error", icon: "❌", msg: "Contest ID missing. Please refresh." });
+                          return;
+                        }
+                        navigate(`/contests/${contestId}/live`);
+                      }}
                       className="w-full rounded-2xl py-3 text-lg font-black bg-gradient-to-br from-[#EA4800] to-[#FF5A1A] text-white"
                     >
                       View Rank

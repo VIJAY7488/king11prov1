@@ -8,6 +8,7 @@ import { buildReferralLink } from "@/lib/referral";
 import { AddMoneyModal } from "@/components/wallet/AddMoneyModal";
 import { WithdrawMoneyModal } from "@/components/wallet/WithdrawMoneyModal";
 import { Button } from "@/components/ui/button";
+import { getEntityId } from "@/lib/id";
 
 type ReferralSummary = {
   referralCode: string;
@@ -205,7 +206,7 @@ export function ProfilePage() {
             ) : (
               <div className="space-y-2">
                 {referralHistory.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#FAFAF8] border border-[#E8E0D4]">
+                  <div key={item.id || item.referredUserId || item.createdAt} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#FAFAF8] border border-[#E8E0D4]">
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-[#1A1208] truncate">{item.referredUserName || item.referredUserMobile || "User"}</div>
                       <div className="text-xs text-[#7A6A55]">
@@ -242,7 +243,7 @@ export function ProfilePage() {
             <p className="text-sm text-[#7A6A55]">No withdrawals yet.</p>
           ) : (
             recentWithdrawals.map((w) => (
-              <div key={w.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#FAFAF8] border border-[#E8E0D4]">
+              <div key={getEntityId(w) || String(w.createdAt)} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#FAFAF8] border border-[#E8E0D4]">
                 <div className="text-sm">
                   <div className="font-semibold">₹{Number(w.amount).toLocaleString("en-IN")}</div>
                   <div className="text-xs text-[#7A6A55]">{new Date(w.createdAt).toLocaleString("en-IN")}</div>

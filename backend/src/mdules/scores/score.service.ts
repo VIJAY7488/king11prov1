@@ -277,6 +277,29 @@ const findSquadPlayer = (
   playerId: string
 ) => squad.find((player) => player && typeof player._id === 'string' && player._id === playerId) ?? null;
 
+const toSafeId = (value: unknown): string | null => {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (value instanceof Types.ObjectId) return value.toString();
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if (record['_id']) return toSafeId(record['_id']);
+  }
+  if (typeof (value as any)?.toString === 'function') {
+    const raw = String((value as any).toString());
+    if (raw && raw !== '[object Object]') return raw;
+  }
+  return null;
+};
+
+const toSafeName = (value: unknown, fallback = 'Unknown'): string => {
+  if (value && typeof value === 'object') {
+    const raw = (value as Record<string, unknown>)['name'];
+    if (typeof raw === 'string' && raw.trim()) return raw.trim();
+  }
+  return fallback;
+};
+
 // ═════════════════════════════════════════════════════════════════════════════
 // LEADERBOARD RECALCULATION
 // Only recalculates teams that contain at least one of the affected players.
@@ -402,12 +425,13 @@ async function recalculateLeaderboards(
       });
 
       const user = entry.userId as any;
+      const userId = toSafeId(user?._id) ?? toSafeId(entry.userId) ?? 'unknown';
       leaderboardEntries.push({
         rank:        liveRank,
-        userId:      user._id?.toString() ?? entry.userId.toString(),
-        userName:    user.name ?? 'Unknown',
-        teamId:      entry.teamId.toString(),
-        livePoints:  entry.livePoints,
+        userId,
+        userName:    toSafeName(user),
+        teamId:      toSafeId(entry.teamId) ?? '',
+        livePoints:  entry.livePoints ?? 0,
         pointsDelta: 0,
       });
     }
@@ -846,13 +870,14 @@ export class ScoreService {
       for (let i = 0; i < rows.length; i++) {
         const e = rows[i];
         const user = e.userId as any;
+        const userId = toSafeId(user?._id) ?? toSafeId(e.userId);
         const rank = i + 1;
         const prizeAmount = rankPrizes[i] ?? 0;
-        if (prizeAmount > 0) {
+        if (prizeAmount > 0 && userId) {
           await walletService.creditContestWinnings(
-            user._id?.toString() ?? e.userId.toString(),
+            userId,
             contest._id.toString(),
-            e.teamId.toString(),
+            toSafeId(e.teamId) ?? '',
             prizeAmount,
             rank
           );
@@ -860,9 +885,9 @@ export class ScoreService {
 
         leaderboardEntries.push({
           rank,
-          userId: user._id?.toString() ?? e.userId.toString(),
-          userName: user.name ?? 'Unknown',
-          teamId: e.teamId.toString(),
+          userId: userId ?? 'unknown',
+          userName: toSafeName(user),
+          teamId: toSafeId(e.teamId) ?? '',
           livePoints: (e as any).finalPoints,
           pointsDelta: 0,
         });
@@ -931,12 +956,13 @@ export class ScoreService {
       contestName: contest.name,
       entries: rows.map((e, i) => {
         const user = e.userId as any;
+        const userId = toSafeId(user?._id) ?? toSafeId(e.userId) ?? 'unknown';
         return {
           rank:        ranks[i] ?? (i + 1),
-          userId:      user._id?.toString() ?? e.userId.toString(),
-          userName:    user.name ?? 'Unknown',
-          teamId:      e.teamId.toString(),
-          livePoints:  e.livePoints,
+          userId,
+          userName:    toSafeName(user),
+          teamId:      toSafeId(e.teamId) ?? '',
+          livePoints:  e.livePoints ?? 0,
           pointsDelta: 0,
         };
       }),
@@ -1009,12 +1035,12 @@ export class ScoreService {
         const entry = row.entry;
         const user = entry.userId as any;
         const team = entry.teamId as any;
-        const userId = user._id?.toString() ?? entry.userId.toString();
+        const userId = toSafeId(user?._id) ?? toSafeId(entry.userId) ?? 'unknown';
         return {
           rank: ranks[idx] ?? (idx + 1),
           userId,
-          userName: user.name ?? 'Unknown',
-          teamId: team?._id?.toString?.() ?? entry.teamId.toString(),
+          userName: toSafeName(user),
+          teamId: toSafeId(team?._id) ?? toSafeId(entry.teamId) ?? '',
           teamName: team?.teamName ?? 'Team',
           livePoints: row.livePoints ?? 0,
           isCurrentUser: userId === currentUserId,
@@ -1066,11 +1092,11 @@ export class ScoreService {
     const scoreMap = new Map<string, number>();
     for (const doc of scoreDocs) scoreMap.set(doc.playerId, doc.fantasyPoints ?? 0);
 
-    const players = (team.players ?? []).map((p: any) => {
+    const players = (team?.players ?? []).map((p: any) => {
       const base = scoreMap.get(p.playerId) ?? 0;
       let multiplier = 1;
-      if (p.playerId === team.captainId || p.captainRole === 'CAPTAIN') multiplier = SCORING_RULES.CAPTAIN_MULTIPLIER;
-      else if (p.playerId === team.viceCaptainId || p.captainRole === 'VICE_CAPTAIN') multiplier = SCORING_RULES.VICE_CAPTAIN_MULTIPLIER;
+      if (p.playerId === team?.captainId || p.captainRole === 'CAPTAIN') multiplier = SCORING_RULES.CAPTAIN_MULTIPLIER;
+      else if (p.playerId === team?.viceCaptainId || p.captainRole === 'VICE_CAPTAIN') multiplier = SCORING_RULES.VICE_CAPTAIN_MULTIPLIER;
       return {
         playerId: p.playerId,
         playerName: p.playerName,
@@ -1086,10 +1112,10 @@ export class ScoreService {
     return {
       contestId: contest._id.toString(),
       contestName: contest.name,
-      teamId: team._id?.toString() ?? teamId,
-      teamName: team.teamName ?? 'Team',
-      userId: user._id?.toString() ?? entry.userId.toString(),
-      userName: user.name ?? 'Unknown',
+      teamId: toSafeId(team?._id) ?? teamId,
+      teamName: team?.teamName ?? 'Team',
+      userId: toSafeId(user?._id) ?? toSafeId(entry.userId) ?? 'unknown',
+      userName: toSafeName(user),
       liveRank: liveRankMap.get(entry._id.toString()) ?? 0,
       livePoints: entry.livePoints ?? 0,
       players,

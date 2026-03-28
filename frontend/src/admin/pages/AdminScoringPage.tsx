@@ -12,7 +12,8 @@ interface Player {
 }
 
 interface MatchInfo {
-  id: string;
+  id?: string;
+  _id?: string;
   team1Name: string;
   team2Name: string;
   team1Players: Array<{ _id?: string; name?: string; role?: string } | null | undefined>;
@@ -213,6 +214,10 @@ export default function AdminScoringPage() {
     if (!match || !batter || !bowler) {
       setError("Load a match and select both a batter and a bowler."); return;
     }
+    const matchId = match.id ?? match._id ?? "";
+    if (!matchId) {
+      setError("Selected match is missing ID. Reload match and try again."); return;
+    }
     if (!batter._id || !bowler._id) {
       setError("Selected batter or bowler is invalid. Reload the match and pick players again."); return;
     }
@@ -222,11 +227,11 @@ export default function AdminScoringPage() {
     const runsConceded = Math.max(totalRunsThisBall, mandatoryExtras);
     const eventId = (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
       ? crypto.randomUUID()
-      : `${match.id}-${over}-${ball}-${Date.now()}`;
+      : `${matchId}-${over}-${ball}-${Date.now()}`;
 
     const payload: Record<string, unknown> = {
       eventId,
-      matchId:          match.id,
+      matchId,
       battingPlayerId:  batter._id,
       bowlingPlayerId:  bowler._id,
       runs: batterRuns,
@@ -283,12 +288,14 @@ export default function AdminScoringPage() {
 
   async function confirmScores() {
     if (!match) { setError("Load a match first."); return; }
+    const matchId = match.id ?? match._id ?? "";
+    if (!matchId) { setError("Match ID is missing. Reload match and try again."); return; }
     setConfirming(true); setError(""); setSuccess("");
     try {
-      await api.post(`/scores/confirm/${match.id}`);
+      await api.post(`/scores/confirm/${matchId}`);
       // Status transition is explicit: confirm scores first, then mark match completed.
       if (match.status !== "COMPLETED") {
-        await api.patch(`/matches/${match.id}`, { status: "COMPLETED" });
+        await api.patch(`/matches/${matchId}`, { status: "COMPLETED" });
         setMatch((prev) => (prev ? { ...prev, status: "COMPLETED" } : prev));
       }
       setSuccess("✅ Match confirmed and marked COMPLETED.");

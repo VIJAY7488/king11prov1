@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { getEntityId } from "@/lib/id";
 
 export interface Contest {
-  id: string;
+  id?: string;
+  _id?: string;
   matchId: string;
   name: string;
   contestType: string;
@@ -63,6 +65,7 @@ const statusStyle = (status: string) => {
 export function ContestCard({ contest, onJoin, hideLiveActions = false }: ContestCardProps) {
   const [guaranteedPrizeTable, setGuaranteedPrizeTable] = useState<ContestPrizeTableResponse | null>(null);
   const [loadingGuaranteedPrize, setLoadingGuaranteedPrize] = useState(false);
+  const contestId = getEntityId(contest);
 
   const m = contest.match;
   const filled = Math.max(0, Math.min(100, contest.fillPercentage ?? 0));
@@ -91,9 +94,9 @@ export function ContestCard({ contest, onJoin, hideLiveActions = false }: Contes
         : contest.status;
 
   useEffect(() => {
-    if (!contest.isGuaranteed) return;
+    if (!contest.isGuaranteed || !contestId) return;
 
-    const cached = guaranteedPrizeCache.get(contest.id);
+    const cached = guaranteedPrizeCache.get(contestId);
     if (cached) {
       setGuaranteedPrizeTable(cached);
       return;
@@ -103,8 +106,8 @@ export function ContestCard({ contest, onJoin, hideLiveActions = false }: Contes
     const loadGuaranteedPrize = async () => {
       setLoadingGuaranteedPrize(true);
       try {
-        const res = await api.get(`/contests/${contest.id}/prize-table`, {
-          cache: { ttlMs: 60_000, key: `contest-prize-table:${contest.id}` },
+        const res = await api.get(`/contests/${contestId}/prize-table`, {
+          cache: { ttlMs: 60_000, key: `contest-prize-table:${contestId}` },
         });
         const data = res.data?.data;
         const payload: ContestPrizeTableResponse = {
@@ -113,7 +116,7 @@ export function ContestCard({ contest, onJoin, hideLiveActions = false }: Contes
           totalWinners: Number(data?.totalWinners ?? 0),
           distribution: Array.isArray(data?.distribution) ? data.distribution : [],
         };
-        guaranteedPrizeCache.set(contest.id, payload);
+        guaranteedPrizeCache.set(contestId, payload);
         if (!cancelled) setGuaranteedPrizeTable(payload);
       } catch {
         if (!cancelled) setGuaranteedPrizeTable(null);
@@ -126,7 +129,7 @@ export function ContestCard({ contest, onJoin, hideLiveActions = false }: Contes
     return () => {
       cancelled = true;
     };
-  }, [contest.id, contest.isGuaranteed, contest.prizePool]);
+  }, [contestId, contest.isGuaranteed, contest.prizePool]);
 
   const guaranteedRows = guaranteedPrizeTable?.distribution ?? [];
 
