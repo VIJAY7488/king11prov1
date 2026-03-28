@@ -297,7 +297,10 @@ async function recalculateLeaderboards(
 
   if (!contests.length) return [];
 
-  const contestIds = contests.map((c: any) => c._id);
+  const validContests = (contests as any[]).filter((contest) => contest?._id);
+  if (!validContests.length) return [];
+
+  const contestIds = validContests.map((contest) => contest._id);
 
   // 2. Only teams that contain one of the affected players
   const affectedTeams = await Team.find({
@@ -309,8 +312,11 @@ async function recalculateLeaderboards(
 
   if (!affectedTeams.length) return [];
 
-  const affectedContestIds = new Set(affectedTeams.map((team: any) => team.contestId.toString()));
-  const affectedContests = (contests as any[]).filter((contest) =>
+  const validTeams = (affectedTeams as any[]).filter((team) => team?._id && team?.contestId && Array.isArray(team?.players));
+  if (!validTeams.length) return [];
+
+  const affectedContestIds = new Set(validTeams.map((team) => team.contestId.toString()));
+  const affectedContests = validContests.filter((contest) =>
     affectedContestIds.has(contest._id.toString())
   );
   if (!affectedContests.length) return [];
@@ -328,18 +334,19 @@ async function recalculateLeaderboards(
   const R = SCORING_RULES;
   const teamPointsMap = new Map<string, number>();
 
-  for (const team of affectedTeams as any[]) {
+  for (const team of validTeams) {
     const captainId =
       team.captainId ??
-      team.players.find((p: any) => p.captainRole === 'CAPTAIN')?.playerId ??
+      team.players.find((p: any) => p && p.captainRole === 'CAPTAIN')?.playerId ??
       null;
     const viceCaptainId =
       team.viceCaptainId ??
-      team.players.find((p: any) => p.captainRole === 'VICE_CAPTAIN')?.playerId ??
+      team.players.find((p: any) => p && p.captainRole === 'VICE_CAPTAIN')?.playerId ??
       null;
 
     let total = 0;
-    for (const player of team.players) {
+    for (const player of team.players as any[]) {
+      if (!player?.playerId) continue;
       const base = scoreMap.get(player.playerId) ?? 0;
       if      (player.playerId === captainId)     total += base * R.CAPTAIN_MULTIPLIER;
       else if (player.playerId === viceCaptainId) total += base * R.VICE_CAPTAIN_MULTIPLIER;
@@ -371,7 +378,15 @@ async function recalculateLeaderboards(
       .select('userId teamId livePoints joinedAt')
       .lean();
 
-    const rows = entries as any[];
+    const rows = (entries as any[]).filter((entry) => entry?._id && entry?.teamId && entry?.userId);
+    if (!rows.length) {
+      snapshots.push({
+        contestId: contest._id.toString(),
+        contestName: contest.name,
+        entries: [],
+      });
+      continue;
+    }
     const ranks = buildTieAwareRanks(rows, (e) => e.livePoints ?? 0);
     const leaderboardEntries: WsLeaderboardEntry[]  = [];
 
