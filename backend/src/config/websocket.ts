@@ -1,135 +1,196 @@
-import WebSocket, { WebSocketServer } from 'ws';
-import { IncomingMessage } from 'http';
 import { Server as HttpServer } from 'http';
-import { URL } from 'url';
+import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import Joi from 'joi';
 import config from './env';
-import { createBullMQConnection } from './redis.config';
 import { JwtPayload } from '../mdules/user/users.types';
+import { createBullMQConnection } from './redis.config';
+import { createMarketEventSubscriber } from './realtimeBus';
+import orderbookService from '../prediction-modules/orderbook/order.service';
+import { OrderOutcome } from '../prediction-modules/orderbook/order.types';
+import { placeOrderSchema, cancelOrderSchema } from '../prediction-modules/orderbook/order.validators';
+import { Market } from '../prediction-modules/markets/market.model';
+import { Trade } from '../prediction-modules/trades/trade.model';
+import { AmmPool } from '../prediction-modules/amm_pools/amm.model';
 
-// ═════════════════════════════════════════════════════════════════════════════
-// CHANNEL HELPERS
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * Returns the Redis pub/sub channel name for a given matchId.
- * score.service.ts publishes to this; the subscriber here fans-out to WS clients.
- */
+export const marketRoom = (marketId: string): string => `market:${marketId}`;
 export const matchChannel = (matchId: string): string => `match:${matchId}`;
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ATTACH WEBSOCKET SERVER
-// ═════════════════════════════════════════════════════════════════════════════
-//
-// Architecture:
-//   • One shared WebSocket server attached to the HTTP server on the same port.
-//   • Clients connect via:  ws://host/ws/match?matchId=<id>&token=<jwt>
-//   • Each client's matchId maps to a Redis sub channel — "match:<matchId>".
-//   • A SINGLE Redis subscriber connection is created ONCE at startup and
-//     shared across all clients. When new matchIds appear, the subscriber
-//     subscribes to that channel. When the last client watching a match
-//     disconnects, we unsubscribe from that channel.
-//   • The subscriber maps channel → Set<WebSocket> to fan-out efficiently.
+type SocketUser = { id: string; mobile: string; role: string };
+type AuthedSocket = Socket & { data: { user?: SocketUser; eventWindow?: { count: number; resetAt: number } } };
+
+const joinMarketSchema = Joi.object({
+  marketId: Joi.string().trim().pattern(/^[a-fA-F0-9]{24}$/).required(),
+});
+
+const leaveMarketSchema = Joi.object({
+  marketId: Joi.string().trim().pattern(/^[a-fA-F0-9]{24}$/).required(),
+});
+
+const isRateLimited = (socket: AuthedSocket, maxPerWindow = 30, windowMs = 10_000): boolean => {
+  const now = Date.now();
+  const win = socket.data.eventWindow;
+  if (!win || now > win.resetAt) {
+    socket.data.eventWindow = { count: 1, resetAt: now + windowMs };
+    return false;
+  }
+  win.count += 1;
+  return win.count > maxPerWindow;
+};
+
+const authFromSocket = (socket: Socket): SocketUser => {
+  const authToken = (socket.handshake.auth?.token as string | undefined)?.trim();
+  const headerToken = socket.handshake.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
+  const queryToken = (socket.handshake.query?.token as string | undefined)?.trim();
+  const token = authToken || headerToken || queryToken;
+  if (!token) throw new Error('Authentication token missing');
+
+  const payload = jwt.verify(token, config.jwtSecret) as JwtPayload;
+  return { id: payload.sub, mobile: payload.mobile, role: String(payload.role) };
+};
+
+const buildJoinSyncPayload = async (marketId: string) => {
+  const [market, pool, orderbookYes, orderbookNo, recentTrades] = await Promise.all([
+    Market.findById(marketId).lean(),
+    AmmPool.findOne({ marketId }).lean(),
+    orderbookService.getOrderBook(marketId, OrderOutcome.YES, 20),
+    orderbookService.getOrderBook(marketId, OrderOutcome.NO, 20),
+    Trade.find({ marketId }).sort({ executedAt: -1 }).limit(20).lean(),
+  ]);
+
+  return {
+    marketId,
+    status: market?.status ?? 'UNKNOWN',
+    currentPrice: {
+      yes: pool?.priceYes ?? null,
+      no: pool?.priceNo ?? null,
+    },
+    orderbook: {
+      yes: orderbookYes,
+      no: orderbookNo,
+    },
+    recentTrades: recentTrades.map((t: any) => ({
+      tradeId: String(t._id),
+      outcome: t.outcome,
+      price: t.price,
+      quantity: t.quantity,
+      executedAt: t.executedAt,
+      tradeType: t.tradeType,
+    })),
+  };
+};
 
 export const attachWebSocketServer = (httpServer: HttpServer): void => {
-
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws/match' });
-
-  // One dedicated ioredis connection for subscribing
-  const subscriber = createBullMQConnection();
-
-  // Map: channel name → set of WebSocket clients watching that channel
-  const channelClients = new Map<string, Set<WebSocket>>();
-
-  // ── Fan-out incoming Redis messages to WS clients ─────────────────────────
-  subscriber.on('message', (channel: string, message: string) => {
-    const clients = channelClients.get(channel);
-    if (!clients || clients.size === 0) return;
-
-    for (const ws of clients) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(message);
-      }
-    }
+  const io = new Server(httpServer, {
+    path: '/socket.io',
+    cors: {
+      origin: true,
+      credentials: true,
+    },
+    transports: ['websocket', 'polling'],
   });
 
-  subscriber.on('error', (err: Error) => {
-    console.error(`🔴 WS Redis subscriber error: ${err.message}`);
-  });
-
-  // ── Handle new WebSocket connections ─────────────────────────────────────
-  wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
-
-    // ── 1. Parse query params ────────────────────────────────────────────
-    const reqUrl  = new URL(req.url ?? '/', `http://${req.headers.host}`);
-    const matchId = reqUrl.searchParams.get('matchId');
-    const token   = reqUrl.searchParams.get('token');
-
-    // ── 2. Validate matchId ──────────────────────────────────────────────
-    if (!matchId) {
-      ws.close(1008, 'matchId query parameter is required');
-      return;
-    }
-
-    // ── 3. Authenticate via JWT ──────────────────────────────────────────
-    if (!token) {
-      ws.close(1008, 'token query parameter is required');
-      return;
-    }
-
+  // JWT auth middleware
+  io.use((socket, next) => {
     try {
-      jwt.verify(token, config.jwtSecret) as JwtPayload;
+      const user = authFromSocket(socket);
+      (socket as AuthedSocket).data.user = user;
+      next();
+    } catch (err) {
+      next(new Error(err instanceof Error ? err.message : 'Unauthorized'));
+    }
+  });
+
+  // Realtime market events from Redis Pub/Sub (for horizontal scaling)
+  const marketEventsSub = createMarketEventSubscriber();
+  marketEventsSub
+    .subscribe((evt) => {
+      io.to(marketRoom(evt.marketId)).emit(evt.event, evt.payload);
+    })
+    .catch((err) => {
+      console.error('🔴 Failed to subscribe market events:', err);
+    });
+
+  // Legacy score feed bridge: match:<id> Redis channels -> Socket.io room market:<id> (match_event)
+  const legacySub = createBullMQConnection();
+  legacySub.on('pmessage', (_pattern, channel, message) => {
+    const parts = channel.split(':');
+    const matchId = parts[0] === 'match' ? parts[1] : null;
+    if (!matchId) return;
+    try {
+      const payload = JSON.parse(message);
+      io.to(marketRoom(matchId)).emit('match_event', payload);
     } catch {
-      ws.close(1008, 'Invalid or expired token');
-      return;
+      io.to(marketRoom(matchId)).emit('match_event', message);
     }
+  });
+  legacySub.psubscribe('match:*').catch((err: Error) => {
+    console.error('🔴 Failed to subscribe legacy match channels:', err.message);
+  });
 
-    // ── 4. Subscribe this client to the match channel ────────────────────
-    const channel = matchChannel(matchId);
+  io.on('connection', (rawSocket) => {
+    const socket = rawSocket as AuthedSocket;
 
-    if (!channelClients.has(channel)) {
-      channelClients.set(channel, new Set());
-      // Subscribe to Redis channel when first client joins
-      subscriber.subscribe(channel, (err) => {
-        if (err) console.error(`🔴 Redis subscribe error for ${channel}: ${err.message}`);
-        else     console.log(`🟢 Redis subscribed to ${channel}`);
-      });
-    }
+    socket.emit('connected', {
+      socketId: socket.id,
+      userId: socket.data.user?.id,
+      message: 'Connected to realtime trading gateway.',
+    });
 
-    channelClients.get(channel)!.add(ws);
-    console.log(`🟢 WS client connected — matchId: ${matchId} | clients on channel: ${channelClients.get(channel)!.size}`);
+    socket.on('join_market', async (payload: unknown) => {
+      if (isRateLimited(socket)) return socket.emit('error_event', { message: 'Rate limit exceeded' });
+      const { error, value } = joinMarketSchema.validate(payload);
+      if (error) return socket.emit('error_event', { message: error.details.map((d) => d.message).join('; ') });
 
-    // Send acknowledgement to the connected client
-    ws.send(JSON.stringify({
-      type:    'CONNECTED',
-      matchId,
-      message: 'Successfully joined live match feed.',
-    }));
+      const room = marketRoom(value.marketId);
+      await socket.join(room);
+      const snapshot = await buildJoinSyncPayload(value.marketId);
+      socket.emit('market_sync', snapshot);
+    });
 
-    // ── 5. Handle client disconnect ──────────────────────────────────────
-    ws.on('close', () => {
-      const clients = channelClients.get(channel);
-      if (clients) {
-        clients.delete(ws);
-        console.log(`🟡 WS client disconnected — matchId: ${matchId} | remaining: ${clients.size}`);
+    socket.on('leave_market', async (payload: unknown) => {
+      if (isRateLimited(socket)) return socket.emit('error_event', { message: 'Rate limit exceeded' });
+      const { error, value } = leaveMarketSchema.validate(payload);
+      if (error) return socket.emit('error_event', { message: error.details.map((d) => d.message).join('; ') });
+      await socket.leave(marketRoom(value.marketId));
+      socket.emit('left_market', { marketId: value.marketId });
+    });
 
-        // Unsubscribe from Redis when no clients are watching this match
-        if (clients.size === 0) {
-          channelClients.delete(channel);
-          subscriber.unsubscribe(channel, (err) => {
-            if (err) console.error(`🔴 Redis unsubscribe error for ${channel}: ${err.message}`);
-            else     console.log(`🟡 Redis unsubscribed from ${channel} — no clients remaining`);
-          });
-        }
+    socket.on('place_order', async (payload: unknown) => {
+      if (isRateLimited(socket)) return socket.emit('error_event', { message: 'Rate limit exceeded' });
+      const { error, value } = placeOrderSchema.validate(payload, { stripUnknown: true });
+      if (error) return socket.emit('error_event', { message: error.details.map((d) => d.message).join('; ') });
+      try {
+        const result = await orderbookService.placeOrder(socket.data.user!.id, {
+          marketId: value.marketId,
+          outcome: value.outcome,
+          side: value.side,
+          orderType: value.orderType,
+          price: value.price,
+          quantity: value.quantity,
+        });
+        socket.emit('order_placed', result);
+      } catch (err) {
+        socket.emit('error_event', { message: err instanceof Error ? err.message : 'Order placement failed' });
       }
     });
 
-    // ── 6. Handle errors silently (don't crash server) ───────────────────
-    ws.on('error', (err: Error) => {
-      console.error(`🔴 WS client error: ${err.message}`);
+    socket.on('cancel_order', async (payload: unknown) => {
+      if (isRateLimited(socket)) return socket.emit('error_event', { message: 'Rate limit exceeded' });
+      const { error, value } = cancelOrderSchema.validate(payload, { stripUnknown: true });
+      if (error) return socket.emit('error_event', { message: error.details.map((d) => d.message).join('; ') });
+      try {
+        const result = await orderbookService.cancelOrder(socket.data.user!.id, value);
+        socket.emit('order_cancelled', result);
+      } catch (err) {
+        socket.emit('error_event', { message: err instanceof Error ? err.message : 'Order cancellation failed' });
+      }
     });
 
+    socket.on('disconnect', () => {
+      // Socket.io handles room cleanup automatically.
+    });
   });
 
-  console.log('🟢 WebSocket server attached — endpoint: /ws/match?matchId=<id>&token=<jwt>');
+  console.log(`🟢 Socket.io server attached on /socket.io (JWT auth enabled)`);
 };

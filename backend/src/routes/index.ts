@@ -8,6 +8,14 @@ import matchRouter   from '../mdules/match/match.routes';
 import scoreRouter   from '../mdules/scores/score.routes';
 import withdrawalRouter from '../mdules/withdrawal/withdrawal.routes';
 import referralRouter from '../mdules/referral/referral.routes';
+import ammRouter from '../prediction-modules/amm_pools/amm.routes';
+import holdingRouter from '../prediction-modules/holdings/holding.routes';
+import orderbookRouter from '../prediction-modules/orderbook/order.routes';
+import smartRouter from '../prediction-modules/smart_router/smartRouter.routes';
+import settlementRouter from '../prediction-modules/settlements/settlement.routes';
+import marketRouter from '../prediction-modules/markets/market.routes';
+import riskRouter from '../prediction-modules/risk_controls/risk.routes';
+import tradeRouter from '../prediction-modules/trades/trade.routes';
 
 const router = Router();
 
@@ -17,6 +25,7 @@ router.use('/users', userRouter);
 // ── Deposits & Wallet ────────────────────────────────────────────────────────
 router.use('/users', depositRouter);
 router.use('/users/wallet', walletRouter);
+router.use('/wallet', walletRouter);
 router.use('/users', withdrawalRouter);
 router.use('/users', referralRouter);
 
@@ -33,5 +42,14 @@ router.use('/', matchRouter);   // GET /matches, GET /matches/live, admin POST/P
 // ── Scores & Leaderboard ──────────────────────────────────────────────────────
 router.use('/', scoreRouter);   // POST /scores/ball, GET /scores/match/:id, etc.
 
-export default router;
+// ── Prediction AMM Trades ───────────────────────────────────────────────────
+router.use('/', ammRouter);
+router.use('/', holdingRouter);
+router.use('/', orderbookRouter);
+router.use('/', smartRouter);
+router.use('/', settlementRouter);
+router.use('/', marketRouter);
+router.use('/', riskRouter);
+router.use('/', tradeRouter);
 
+export default router;

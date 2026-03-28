@@ -34,6 +34,7 @@ const toPublicProfile = (user: IUser): UserPublicProfile => ({
     mobileNumber: user.mobileNumber,
     role: user.role,
     walletBalance: user.walletBalance,
+    lockedBalance: user.lockedBalance,
     withdrawableBalance: user.withdrawableBalance,
     nonWithdrawableBonusBalance: user.nonWithdrawableBonusBalance,
     referralCode: user.referralCode,

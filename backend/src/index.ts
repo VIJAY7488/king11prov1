@@ -26,7 +26,7 @@ const bootstrap = async (): Promise<void> => {
   httpServer.listen(config.port, () => {
     console.log(`✅ Server running on http://localhost:${config.port}`);
     console.log(`📋 Health check: http://localhost:${config.port}/api/v1/health`);
-    console.log(`🔌 WebSocket:    ws://localhost:${config.port}/ws/match?matchId=<id>&token=<jwt>`);
+    console.log(`🔌 Socket.io:    ws://localhost:${config.port}/socket.io (JWT auth + market rooms)`);
   });
 
   // ── Graceful Shutdown ─────────────────────────────────────────────────────

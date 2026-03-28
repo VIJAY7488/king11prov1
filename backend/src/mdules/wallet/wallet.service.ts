@@ -1,6 +1,6 @@
 import mongoose, { Types } from "mongoose"
 import Transaction from "./wallet.model"
-import { CreditDepositBonusDTO, CreditFromDepositDTO, PaginatedTransactions, TransactionQueryParams, TransactionRecord, TransactionStatus, TransactionType, WalletBalanceSummary, WalletOperationResult } from "./wallet.types"
+import { CreditDepositBonusDTO, CreditFromDepositDTO, PaginatedTransactions, TransactionQueryParams, TransactionRecord, TransactionStatus, TransactionType, WalletBalanceSummary, WalletMutationDTO, WalletOperationResult, WalletTransferLockedToDebitDTO, WalletTxnReason } from "./wallet.types"
 import { ClientSession } from "mongoose";
 import User from "../user/users.model";
 import AppError from "../../utils/AppError";
@@ -19,6 +19,7 @@ const toTransactionRecord = (doc: InstanceType<typeof Transaction>): Transaction
     balanceBefore: doc.balanceBefore,
     balanceAfter: doc.balanceAfter,
     referenceId: doc.referenceId,
+    reason: doc.reason,
     metadata: doc.metadata,
     createdAt: doc.createdAt,
 });
@@ -50,6 +51,290 @@ const withTransaction = async <T>(
 // ── Service ───────────────────────────────────────────────────────────────────
 
 export class WalletService {
+    private ensureWalletInvariant(
+      walletBalance: number,
+      withdrawableBalance: number,
+      nonWithdrawableBonusBalance: number,
+      lockedBalance: number
+    ): void {
+      if (walletBalance < 0 || withdrawableBalance < 0 || nonWithdrawableBonusBalance < 0 || lockedBalance < 0) {
+        throw new AppError('Wallet invariant violated: balances cannot be negative.', 500);
+      }
+      if (lockedBalance > walletBalance) {
+        throw new AppError('Wallet invariant violated: lockedBalance cannot exceed total balance.', 500);
+      }
+    }
+
+    private async appendLedgerEntry(
+      userId: Types.ObjectId,
+      type: TransactionType,
+      amount: number,
+      balanceBefore: number,
+      balanceAfter: number,
+      referenceId: string,
+      reason: WalletTxnReason,
+      metadata: Record<string, unknown> | undefined,
+      session?: ClientSession
+    ): Promise<TransactionRecord> {
+      const [txn] = await Transaction.create(
+        [
+          {
+            userId,
+            type,
+            status: TransactionStatus.SUCCESS,
+            amount,
+            balanceBefore,
+            balanceAfter,
+            referenceId,
+            reason,
+            metadata,
+          }
+        ],
+        session ? { session } : undefined
+      );
+
+      return toTransactionRecord(txn);
+    }
+
+    async getWallet(userId: string, session?: ClientSession): Promise<WalletBalanceSummary> {
+      const query = User.findById(userId).select('walletBalance lockedBalance withdrawableBalance nonWithdrawableBonusBalance');
+      if (session) query.session(session);
+      const user = await query;
+      if (!user) throw new AppError('User not found.', 404);
+
+      return {
+        totalBalance: user.walletBalance,
+        lockedBalance: user.lockedBalance,
+        availableBalance: Math.max(0, user.walletBalance - user.lockedBalance),
+        withdrawableBalance: user.withdrawableBalance,
+        nonWithdrawableBonusBalance: user.nonWithdrawableBonusBalance,
+      };
+    }
+
+    async checkBalance(userId: string, amount: number, session?: ClientSession): Promise<boolean> {
+      if (!Number.isFinite(amount) || amount <= 0) throw new AppError('amount must be greater than 0.', 400);
+      const wallet = await this.getWallet(userId, session);
+      return wallet.availableBalance >= amount;
+    }
+
+    async debitBalance(userId: string, dto: WalletMutationDTO, session?: ClientSession): Promise<WalletOperationResult> {
+      if (!Number.isFinite(dto.amount) || dto.amount <= 0) throw new AppError('amount must be greater than 0.', 400);
+      const execute = async (txnSession: ClientSession): Promise<WalletOperationResult> => {
+        const user = await User.findById(userId).session(txnSession);
+        if (!user) throw new AppError('User not found.', 404);
+        if (!user.isActive) throw new AppError('Account is deactivated.', 403);
+
+        const available = user.walletBalance - user.lockedBalance;
+        if (available < dto.amount) throw new AppError('Insufficient available wallet balance.', 402);
+
+        const bonusUsed = Math.min(user.nonWithdrawableBonusBalance, dto.amount);
+        const withdrawableUsed = dto.amount - bonusUsed;
+
+        const balanceBefore = user.walletBalance;
+        user.walletBalance = Number((user.walletBalance - dto.amount).toFixed(8));
+        user.withdrawableBalance = Number((user.withdrawableBalance - withdrawableUsed).toFixed(8));
+        user.nonWithdrawableBonusBalance = Number((user.nonWithdrawableBonusBalance - bonusUsed).toFixed(8));
+        this.ensureWalletInvariant(
+          user.walletBalance,
+          user.withdrawableBalance,
+          user.nonWithdrawableBonusBalance,
+          user.lockedBalance
+        );
+        await user.save({ session: txnSession });
+
+        const transaction = await this.appendLedgerEntry(
+          user._id,
+          TransactionType.DEBIT,
+          dto.amount,
+          balanceBefore,
+          user.walletBalance,
+          dto.referenceId,
+          dto.reason,
+          { ...(dto.metadata ?? {}), bonusUsed, withdrawableUsed },
+          txnSession
+        );
+        return { transaction, currentBalance: user.walletBalance };
+      };
+
+      if (session) return execute(session);
+      return withTransaction(execute);
+    }
+
+    async creditBalance(userId: string, dto: WalletMutationDTO, session?: ClientSession): Promise<WalletOperationResult> {
+      if (!Number.isFinite(dto.amount) || dto.amount <= 0) throw new AppError('amount must be greater than 0.', 400);
+      const execute = async (txnSession: ClientSession): Promise<WalletOperationResult> => {
+        const user = await User.findById(userId).session(txnSession);
+        if (!user) throw new AppError('User not found.', 404);
+        if (!user.isActive) throw new AppError('Account is deactivated.', 403);
+
+        const balanceBefore = user.walletBalance;
+        user.walletBalance = Number((user.walletBalance + dto.amount).toFixed(8));
+        user.withdrawableBalance = Number((user.withdrawableBalance + dto.amount).toFixed(8));
+        this.ensureWalletInvariant(
+          user.walletBalance,
+          user.withdrawableBalance,
+          user.nonWithdrawableBonusBalance,
+          user.lockedBalance
+        );
+        await user.save({ session: txnSession });
+
+        const transaction = await this.appendLedgerEntry(
+          user._id,
+          TransactionType.CREDIT,
+          dto.amount,
+          balanceBefore,
+          user.walletBalance,
+          dto.referenceId,
+          dto.reason,
+          dto.metadata,
+          txnSession
+        );
+        return { transaction, currentBalance: user.walletBalance };
+      };
+
+      if (session) return execute(session);
+      return withTransaction(execute);
+    }
+
+    async lockBalance(userId: string, dto: WalletMutationDTO, session?: ClientSession): Promise<WalletOperationResult> {
+      if (!Number.isFinite(dto.amount) || dto.amount <= 0) throw new AppError('amount must be greater than 0.', 400);
+      const execute = async (txnSession: ClientSession): Promise<WalletOperationResult> => {
+        const user = await User.findById(userId).session(txnSession);
+        if (!user) throw new AppError('User not found.', 404);
+        if (!user.isActive) throw new AppError('Account is deactivated.', 403);
+
+        const available = user.walletBalance - user.lockedBalance;
+        if (available < dto.amount) throw new AppError('Insufficient available balance to lock funds.', 402);
+
+        const balanceBefore = user.walletBalance;
+        user.lockedBalance = Number((user.lockedBalance + dto.amount).toFixed(8));
+        this.ensureWalletInvariant(
+          user.walletBalance,
+          user.withdrawableBalance,
+          user.nonWithdrawableBonusBalance,
+          user.lockedBalance
+        );
+        await user.save({ session: txnSession });
+
+        const transaction = await this.appendLedgerEntry(
+          user._id,
+          TransactionType.LOCK,
+          dto.amount,
+          balanceBefore,
+          user.walletBalance,
+          dto.referenceId,
+          dto.reason,
+          { ...(dto.metadata ?? {}), lockedBalanceAfter: user.lockedBalance },
+          txnSession
+        );
+        return { transaction, currentBalance: user.walletBalance };
+      };
+
+      if (session) return execute(session);
+      return withTransaction(execute);
+    }
+
+    async unlockBalance(userId: string, dto: WalletMutationDTO, session?: ClientSession): Promise<WalletOperationResult> {
+      if (!Number.isFinite(dto.amount) || dto.amount <= 0) throw new AppError('amount must be greater than 0.', 400);
+      const execute = async (txnSession: ClientSession): Promise<WalletOperationResult> => {
+        const user = await User.findById(userId).session(txnSession);
+        if (!user) throw new AppError('User not found.', 404);
+        if (!user.isActive) throw new AppError('Account is deactivated.', 403);
+        if (user.lockedBalance < dto.amount) throw new AppError('Insufficient locked balance to unlock.', 409);
+
+        const balanceBefore = user.walletBalance;
+        user.lockedBalance = Number((user.lockedBalance - dto.amount).toFixed(8));
+        this.ensureWalletInvariant(
+          user.walletBalance,
+          user.withdrawableBalance,
+          user.nonWithdrawableBonusBalance,
+          user.lockedBalance
+        );
+        await user.save({ session: txnSession });
+
+        const transaction = await this.appendLedgerEntry(
+          user._id,
+          TransactionType.UNLOCK,
+          dto.amount,
+          balanceBefore,
+          user.walletBalance,
+          dto.referenceId,
+          dto.reason,
+          { ...(dto.metadata ?? {}), lockedBalanceAfter: user.lockedBalance },
+          txnSession
+        );
+        return { transaction, currentBalance: user.walletBalance };
+      };
+
+      if (session) return execute(session);
+      return withTransaction(execute);
+    }
+
+    async transferLockedToDebit(
+      userId: string,
+      dto: WalletTransferLockedToDebitDTO,
+      session?: ClientSession
+    ): Promise<WalletOperationResult> {
+      if (!Number.isFinite(dto.amount) || dto.amount <= 0) throw new AppError('amount must be greater than 0.', 400);
+      const execute = async (txnSession: ClientSession): Promise<WalletOperationResult> => {
+        const user = await User.findById(userId).session(txnSession);
+        if (!user) throw new AppError('User not found.', 404);
+        if (!user.isActive) throw new AppError('Account is deactivated.', 403);
+        if (user.lockedBalance < dto.amount) throw new AppError('Insufficient locked balance for settlement.', 409);
+
+        const balanceBefore = user.walletBalance;
+        const bonusUsed = Math.min(user.nonWithdrawableBonusBalance, dto.amount);
+        const withdrawableUsed = dto.amount - bonusUsed;
+
+        user.lockedBalance = Number((user.lockedBalance - dto.amount).toFixed(8));
+        user.walletBalance = Number((user.walletBalance - dto.amount).toFixed(8));
+        user.withdrawableBalance = Number((user.withdrawableBalance - withdrawableUsed).toFixed(8));
+        user.nonWithdrawableBonusBalance = Number((user.nonWithdrawableBonusBalance - bonusUsed).toFixed(8));
+        this.ensureWalletInvariant(
+          user.walletBalance,
+          user.withdrawableBalance,
+          user.nonWithdrawableBonusBalance,
+          user.lockedBalance
+        );
+        await user.save({ session: txnSession });
+
+        const transaction = await this.appendLedgerEntry(
+          user._id,
+          TransactionType.DEBIT,
+          dto.amount,
+          balanceBefore,
+          user.walletBalance,
+          dto.referenceId,
+          dto.reason ?? WalletTxnReason.ORDER_EXECUTION,
+          { ...(dto.metadata ?? {}), fromLockedBalance: true, bonusUsed, withdrawableUsed },
+          txnSession
+        );
+        return { transaction, currentBalance: user.walletBalance };
+      };
+
+      if (session) return execute(session);
+      return withTransaction(execute);
+    }
+
+    async creditSettlement(
+      userId: string,
+      amount: number,
+      referenceId: string,
+      metadata?: Record<string, unknown>,
+      session?: ClientSession
+    ): Promise<WalletOperationResult> {
+      return this.creditBalance(
+        userId,
+        {
+          amount,
+          referenceId,
+          reason: WalletTxnReason.SETTLEMENT,
+          metadata,
+        },
+        session
+      );
+    }
+
     // ── INTERNAL: Credit from Approved Deposit ────────────────────────────────
     /**
         * Called exclusively by deposit.service.approveDeposit() inside its own
@@ -354,10 +639,12 @@ export class WalletService {
     // ── Read Operations ────────────────────────────────────────────────────────
 
     async getBalance(userId: string): Promise<WalletBalanceSummary> {
-        const user = await User.findById(userId).select('walletBalance withdrawableBalance nonWithdrawableBonusBalance');
+        const user = await User.findById(userId).select('walletBalance lockedBalance withdrawableBalance nonWithdrawableBonusBalance');
         if (!user) throw new AppError('User not found.', 404);
         return {
             totalBalance: user.walletBalance,
+            lockedBalance: user.lockedBalance,
+            availableBalance: Math.max(0, user.walletBalance - user.lockedBalance),
             withdrawableBalance: user.withdrawableBalance,
             nonWithdrawableBonusBalance: user.nonWithdrawableBonusBalance,
         };

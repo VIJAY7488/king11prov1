@@ -1,5 +1,5 @@
 import { Document, model, Model, Schema, Types } from "mongoose";
-import { TransactionStatus, TransactionType } from "./wallet.types";
+import { TransactionStatus, TransactionType, WalletTxnReason } from "./wallet.types";
 
 
 
@@ -14,6 +14,7 @@ export interface ITransaction extends Document {
     balanceBefore: number;
     balanceAfter: number;
     referenceId?: string;
+    reason?: WalletTxnReason;
     metadata?: Record<string, unknown>;
     createdAt: Date;
     updatedAt: Date;
@@ -76,6 +77,12 @@ const transactionSchema = new Schema<ITransaction, ITransactionModel> ({
         sparse: true,
     },
 
+    reason: {
+        type: String,
+        enum: Object.values(WalletTxnReason),
+        default: undefined,
+    },
+
     // Flexible bag for context-specific data
     metadata: {
         type: Schema.Types.Mixed,
@@ -93,13 +100,27 @@ transactionSchema.index({ userId: 1, createdAt: -1 });          // user history 
 transactionSchema.index({ userId: 1, type: 1 });                // filter by type
 transactionSchema.index({ userId: 1, status: 1 });              // filter by status
 transactionSchema.index({ referenceId: 1 }, { sparse: true });  // idempotency lookups
+transactionSchema.index({ userId: 1, reason: 1, createdAt: -1 });
 
 
 // ── Static: getBalanceSummary ─────────────────────────────────────────────────
 transactionSchema.statics.getBalanceSummary = async function (userId: Types.ObjectId):
   Promise<{ totalDeposited: number; totalDeducted: number; transactionCount: number }> {
-    const CREDIT_TYPES = [TransactionType.DEPOSIT, TransactionType.DEPOSIT_BONUS, TransactionType.REFERRAL_BONUS, TransactionType.REFUND, TransactionType.WIN_PRIZE];
-    const DEBIT_TYPES  = [TransactionType.DEDUCTION, TransactionType.JOIN_CONTEST];
+    const CREDIT_TYPES = [
+      TransactionType.DEPOSIT,
+      TransactionType.DEPOSIT_BONUS,
+      TransactionType.REFERRAL_BONUS,
+      TransactionType.REFUND,
+      TransactionType.WIN_PRIZE,
+      TransactionType.CREDIT,
+      TransactionType.TRADE_SELL_AMM,
+    ];
+    const DEBIT_TYPES  = [
+      TransactionType.DEDUCTION,
+      TransactionType.JOIN_CONTEST,
+      TransactionType.DEBIT,
+      TransactionType.TRADE_BUY_AMM,
+    ];
 
     const [result] = await this.aggregate([
         { $match: { userId, status: TransactionStatus.SUCCESS } },

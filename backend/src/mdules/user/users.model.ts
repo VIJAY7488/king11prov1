@@ -18,6 +18,7 @@ export interface IUser extends Document {
     mobileNumber: string;
     password: string;
     walletBalance: number;
+    lockedBalance: number;
     withdrawableBalance: number;
     nonWithdrawableBonusBalance: number;
     referralCode: string;
@@ -70,6 +71,12 @@ const userSchema = new Schema<IUser>({
         type: Number,
         default: 0,
         min: [0, 'Wallet balance cannot be negative'],
+    },
+
+    lockedBalance: {
+        type: Number,
+        default: 0,
+        min: [0, 'Locked balance cannot be negative'],
     },
 
     withdrawableBalance: {

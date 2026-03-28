@@ -13,6 +13,12 @@ export enum TransactionType {
     JOIN_CONTEST = 'JOIN_CONTEST', // contest entry fee
     WIN_PRIZE    = 'WIN_PRIZE',    // prize credited on contest result
     WITHDRAWAL   = 'WITHDRAWAL',   // user withdrawal request (pending/success/reversed)
+    TRADE_BUY_AMM = 'TRADE_BUY_AMM', // AMM prediction trade debit
+    TRADE_SELL_AMM = 'TRADE_SELL_AMM', // AMM prediction trade credit
+    DEBIT = 'DEBIT',
+    CREDIT = 'CREDIT',
+    LOCK = 'LOCK',
+    UNLOCK = 'UNLOCK',
 }
 
 
@@ -21,6 +27,17 @@ export enum TransactionStatus {
     SUCCESS   = 'SUCCESS',
     FAILED    = 'FAILED',
     REVERSED  = 'REVERSED',
+}
+
+export enum WalletTxnReason {
+  TRADE = 'TRADE',
+  SETTLEMENT = 'SETTLEMENT',
+  REFUND = 'REFUND',
+  DEPOSIT = 'DEPOSIT',
+  WITHDRAW = 'WITHDRAW',
+  ORDER_PLACE = 'ORDER_PLACE',
+  ORDER_CANCEL = 'ORDER_CANCEL',
+  ORDER_EXECUTION = 'ORDER_EXECUTION',
 }
 
 
@@ -49,6 +66,20 @@ export interface DeductDTO {
   referenceId?: string;
 }
 
+export interface WalletMutationDTO {
+  amount: number;
+  referenceId: string;
+  reason: WalletTxnReason;
+  metadata?: Record<string, unknown>;
+}
+
+export interface WalletTransferLockedToDebitDTO {
+  amount: number;
+  referenceId: string;
+  reason?: WalletTxnReason;
+  metadata?: Record<string, unknown>;
+}
+
 export interface JoinContestDTO {
   contestId: string;
   entryFee: number;
@@ -66,6 +97,7 @@ export interface TransactionRecord {
   balanceBefore: number;
   balanceAfter: number;
   referenceId?: string;
+  reason?: WalletTxnReason;
   metadata?: Record<string, unknown>;
   createdAt: Date;
 }
@@ -85,6 +117,8 @@ export interface WalletOperationResult {
 
 export interface WalletBalanceSummary {
   totalBalance: number;
+  lockedBalance: number;
+  availableBalance: number;
   withdrawableBalance: number;
   nonWithdrawableBonusBalance: number;
 }

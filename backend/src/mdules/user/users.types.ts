@@ -30,6 +30,7 @@ export interface UserPublicProfile {
   mobileNumber: string;
   role: UserRole;
   walletBalance: number;
+  lockedBalance: number;
   withdrawableBalance: number;
   nonWithdrawableBonusBalance: number;
   referralCode: string;
