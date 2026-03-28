@@ -41,12 +41,6 @@ const Navbar = () => {
       isActive: pathname === "/",
     },
     {
-      to: "/predict",
-      icon: "📈",
-      label: "Predict",
-      isActive: pathname === "/predict" || pathname.startsWith("/predict/"),
-    },
-    {
       to: "/matches",
       icon: "🏏",
       label: "My Matches",
@@ -152,6 +146,12 @@ const Navbar = () => {
               className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-extrabold transition-all bg-[#FFF0EA] text-[#EA4800] border-[1.5px] border-[#EA4800]/30"
             >
               🏏 Fantasy
+            </Link>
+            <Link
+              to="/predict"
+              className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-extrabold transition-all bg-white text-[#7A6A55] border-[1.5px] border-[#E8E0D4] hover:border-[#EA4800]/50 hover:text-[#EA4800]"
+            >
+              📈 Predict
             </Link>
           </div>
         </div>
