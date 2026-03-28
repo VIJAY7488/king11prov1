@@ -174,7 +174,6 @@ const marketSchema = new Schema<IMarket, IMarketModel>(
         q_no: 1000,
         b: 100,
         totalLiquidity: 10000,
-        lastUpdatedAt: Date.now,
       },
     },
     orderBookEnabled: {
