@@ -118,7 +118,8 @@ class OrderbookService {
     const market = await Market.findById(marketId).session(session);
     if (!market) throw new AppError('Market not found.', 404);
     if (market.status !== MarketStatus.OPEN) throw new AppError('Market is not open for trading.', 409);
-    if (!market.orderBookEnabled) throw new AppError('Order book is disabled for this market.', 409);
+    // Backward compatibility: legacy market docs may not have orderBookEnabled persisted.
+    if (market.orderBookEnabled === false) throw new AppError('Order book is disabled for this market.', 409);
     if (market.closeAt && market.closeAt.getTime() <= Date.now()) throw new AppError('Market has closed for trading.', 409);
   }
 

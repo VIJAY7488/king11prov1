@@ -149,10 +149,51 @@ class SmartRouterService {
             };
           }
 
-          if (ammQuoteError instanceof Error) {
-            throw ammQuoteError;
+          // If AMM is unavailable but user submitted a limit price, place a resting order on book.
+          if (typeof dto.optionalLimitPrice === 'number') {
+            const passiveOrder = await orderbookService.placeOrderWithOptions(
+              userId,
+              {
+                marketId: dto.marketId,
+                outcome: orderOutcome,
+                side: dto.type,
+                orderType: OrderType.LIMIT,
+                price: dto.optionalLimitPrice,
+                quantity: remainingQty,
+              },
+              {
+                disableAmmFallback: true,
+                cancelUnfilledRemainder: false,
+              }
+            );
+
+            return {
+              route: 'ORDER_BOOK',
+              totalQuantity: dto.quantity,
+              bookFilledQuantity: passiveOrder.filledQuantity,
+              ammFilledQuantity: 0,
+              bookOrderId: passiveOrder.orderId,
+              estimatedBookPrice: bestBookPrice ?? dto.optionalLimitPrice,
+              estimatedAmmPrice: null,
+            };
           }
-          throw new AppError('No executable liquidity in orderbook and AMM is unavailable.', 409);
+
+          const noBookLiquidity = bestBookPrice === null;
+          if (noBookLiquidity) {
+            throw new AppError(
+              'No matching orderbook liquidity and AMM trading is disabled for this market.',
+              409
+            );
+          }
+
+          if (ammQuoteError instanceof Error) {
+            throw new AppError(
+              `Trade could not route to AMM after orderbook evaluation: ${ammQuoteError.message}`,
+              409
+            );
+          }
+
+          throw new AppError('Trade could not execute: orderbook fill unavailable and AMM unavailable.', 409);
         }
 
         await riskEngine.preTradeCheck({

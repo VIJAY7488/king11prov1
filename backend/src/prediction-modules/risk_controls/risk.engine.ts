@@ -51,8 +51,8 @@ class RiskEngine {
           yesExposure: 0,
           noExposure: 0,
           netExposure: 0,
-          ammEnabled: market.ammEnabled,
-          orderBookEnabled: market.orderBookEnabled,
+          ammEnabled: market.ammEnabled ?? true,
+          orderBookEnabled: market.orderBookEnabled ?? true,
           baseB: market.ammState.b ?? 100,
           adjustedB: market.ammState.b ?? 100,
           ammSideLimits: {

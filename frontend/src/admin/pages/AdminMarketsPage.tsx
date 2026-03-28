@@ -66,6 +66,7 @@ export default function AdminMarketsPage() {
     slug: "",
     category: "CRICKET",
     status: "OPEN",
+    initialPriceYes: 0.5,
     closeAt: "",
     sourceType: "ORACLE" as ResolutionSourceType,
     provider: "cricbuzz",
@@ -101,6 +102,10 @@ export default function AdminMarketsPage() {
   async function createMarket() {
     const question = form.question.trim();
     const slug = (form.slug.trim() || slugify(question)).toLowerCase();
+    if (!Number.isFinite(form.initialPriceYes) || form.initialPriceYes < 0.01 || form.initialPriceYes > 0.99) {
+      setError("Initial YES price must be between 0.01 and 0.99.");
+      return;
+    }
     if (!question || !slug || !form.closeAt || !form.referenceId.trim()) {
       setError("Question, slug, close time and reference ID are required.");
       return;
@@ -119,6 +124,7 @@ export default function AdminMarketsPage() {
         question,
         category: form.category,
         status: form.status,
+        initialPriceYes: form.initialPriceYes,
         closeAt: new Date(form.closeAt).toISOString(),
         resolutionSource: {
           type: form.sourceType,
@@ -136,6 +142,7 @@ export default function AdminMarketsPage() {
         slug: "",
         category: "CRICKET",
         status: "OPEN",
+        initialPriceYes: 0.5,
         closeAt: "",
         sourceType: "ORACLE",
         provider: "cricbuzz",
@@ -197,6 +204,18 @@ export default function AdminMarketsPage() {
               <select value={form.status} onChange={(e) => setF("status", e.target.value)} style={{ ...INPUT, appearance: "none" }}>
                 {STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
+            </div>
+            <div>
+              <label style={LABEL}>Initial YES Price (0.01 - 0.99)</label>
+              <input
+                type="number"
+                min={0.01}
+                max={0.99}
+                step={0.01}
+                value={form.initialPriceYes}
+                onChange={(e) => setF("initialPriceYes", Number(e.target.value))}
+                style={INPUT}
+              />
             </div>
             <div>
               <label style={LABEL}>Close At *</label>

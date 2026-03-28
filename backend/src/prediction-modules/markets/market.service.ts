@@ -4,16 +4,71 @@ import { Market } from './market.model';
 import { MarketStatus } from './market.types';
 
 class MarketService {
+  private round(value: number): number {
+    return Number(value.toFixed(8));
+  }
+
   private toObjectId(id: string, label: string): Types.ObjectId {
     if (!Types.ObjectId.isValid(id)) throw new AppError(`Invalid ${label}.`, 400);
     return new Types.ObjectId(id);
   }
 
+  private deriveAmmStateFromInitialPrice(
+    initialPriceYes: number,
+    rawAmmState: unknown
+  ): { q_yes: number; q_no: number; b: number; totalLiquidity: number } {
+    const ammState =
+      rawAmmState && typeof rawAmmState === 'object'
+        ? (rawAmmState as Record<string, unknown>)
+        : {};
+
+    const b = Number(ammState.b ?? 100);
+    const totalLiquidity = Number(ammState.totalLiquidity ?? 10000);
+    const defaultMid = Math.max(1000, b * 10);
+    const providedBase = Number(ammState.q_yes ?? ammState.q_no ?? defaultMid);
+    const mid = Number.isFinite(providedBase) && providedBase > 0
+      ? providedBase
+      : defaultMid;
+
+    // LMSR price mapping:
+    // p_yes = e^(q_yes / b) / (e^(q_yes / b) + e^(q_no / b))
+    // => (q_yes - q_no) = b * ln(p_yes / (1 - p_yes))
+    const logit = b * Math.log(initialPriceYes / (1 - initialPriceYes));
+    let q_yes = mid + (logit / 2);
+    let q_no = mid - (logit / 2);
+
+    // Keep inventories positive.
+    const minInventory = 1;
+    if (q_yes < minInventory || q_no < minInventory) {
+      const shift = minInventory - Math.min(q_yes, q_no);
+      q_yes += shift;
+      q_no += shift;
+    }
+
+    return {
+      q_yes: this.round(q_yes),
+      q_no: this.round(q_no),
+      b: this.round(b),
+      totalLiquidity: this.round(totalLiquidity),
+    };
+  }
+
   async createMarket(adminUserId: string, payload: Record<string, unknown>) {
     const createdBy = this.toObjectId(adminUserId, 'adminUserId');
+    const input: Record<string, unknown> = { ...payload };
+
+    const initialPriceYes = typeof input.initialPriceYes === 'number'
+      ? input.initialPriceYes
+      : undefined;
+
+    delete input.initialPriceYes;
+
+    if (typeof initialPriceYes === 'number') {
+      input.ammState = this.deriveAmmStateFromInitialPrice(initialPriceYes, input.ammState);
+    }
 
     const doc = await Market.create({
-      ...payload,
+      ...input,
       createdBy,
       resolvedOutcome: null,
       resolvedAt: null,

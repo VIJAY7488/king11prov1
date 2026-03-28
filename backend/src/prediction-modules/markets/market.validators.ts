@@ -95,6 +95,10 @@ export const createMarketSchema = Joi.object({
     b: 100,
     totalLiquidity: 10000,
   }),
+  initialPriceYes: Joi.number().min(0.01).max(0.99).optional().messages({
+    'number.min': 'initialPriceYes must be at least 0.01',
+    'number.max': 'initialPriceYes must be at most 0.99',
+  }),
 
   orderBookEnabled: Joi.boolean().default(true),
   ammEnabled: Joi.boolean().default(true),

@@ -54,7 +54,8 @@ const lmsrPrices = (state: LmsrState): { priceYes: number; priceNo: number } => 
 
 const ensureTradableMarket = (market: IMarket): void => {
   if (market.status !== MarketStatus.OPEN) throw new AppError('Market is not open for trading.', 409);
-  if (!market.ammEnabled) throw new AppError('AMM trading is disabled for this market.', 409);
+  // Backward compatibility: legacy market docs may not have ammEnabled persisted.
+  if (market.ammEnabled === false) throw new AppError('AMM trading is disabled for this market.', 409);
   if (market.closeAt && market.closeAt.getTime() <= Date.now()) {
     throw new AppError('Market trading window has closed.', 409);
   }
