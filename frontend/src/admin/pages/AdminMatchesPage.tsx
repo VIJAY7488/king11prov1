@@ -5,6 +5,7 @@ interface Match {
   id: string;
   _id?: string;
   name?: string;
+  league?: string;
   team1Name: string;
   team2Name: string;
   format: string;
@@ -223,7 +224,7 @@ export default function AdminMatchesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const [form, setForm] = useState({ team1Name: "", team2Name: "", matchDate: "", venue: "" });
+  const [form, setForm] = useState({ league: "", team1Name: "", team2Name: "", matchDate: "", venue: "" });
   const [team1Players, setTeam1Players] = useState<PlayerEntry[]>([]);
   const [team2Players, setTeam2Players] = useState<PlayerEntry[]>([]);
   const [saving, setSaving] = useState(false);
@@ -245,7 +246,7 @@ export default function AdminMatchesPage() {
 
   function setF(k: string, v: string) { setForm((p) => ({ ...p, [k]: v })); }
   function resetFormState() {
-    setForm({ team1Name: "", team2Name: "", matchDate: "", venue: "" });
+    setForm({ league: "", team1Name: "", team2Name: "", matchDate: "", venue: "" });
     setTeam1Players([]);
     setTeam2Players([]);
     setEditingId(null);
@@ -317,6 +318,7 @@ export default function AdminMatchesPage() {
 
       setEditingId(m.id ?? m._id ?? matchId);
       setForm({
+        league: m.league ?? "",
         team1Name: m.team1Name ?? "",
         team2Name: m.team2Name ?? "",
         matchDate: matchDateLocal,
@@ -373,6 +375,7 @@ export default function AdminMatchesPage() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
+            <Field label="League" value={form.league} onChange={(v) => setF("league", v)} placeholder="IPL 2026 / Tri Series" />
             <Field label="Team 1 Name *"  value={form.team1Name} onChange={(v) => setF("team1Name", v)} placeholder="India" />
             <Field label="Team 2 Name *"  value={form.team2Name} onChange={(v) => setF("team2Name", v)} placeholder="Australia" />
             <Field label="Match Date & Time *" value={form.matchDate} onChange={(v) => setF("matchDate", v)} type="datetime-local" />
@@ -420,15 +423,16 @@ export default function AdminMatchesPage() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #1E1E1E" }}>
-                {["Match", "Date", "Venue", "Status", "ID", "Actions"].map((h) => (
+                {["League", "Match", "Date", "Venue", "Status", "ID", "Actions"].map((h) => (
                   <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, fontWeight: 700, color: "#444", textTransform: "uppercase" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {matches.length === 0 && <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: "#444" }}>No matches yet</td></tr>}
+              {matches.length === 0 && <tr><td colSpan={7} style={{ padding: 24, textAlign: "center", color: "#444" }}>No matches yet</td></tr>}
               {matches.map((m) => (
                 <tr key={m.id} style={{ borderBottom: "1px solid #111" }}>
+                  <td style={{ padding: "12px 16px", color: "#aaa", fontSize: 12 }}>{m.league || "—"}</td>
                   <td style={{ padding: "12px 16px" }}>
                     <div style={{ fontWeight: 700, color: "#ddd", fontSize: 13 }}>{m.team1Name} vs {m.team2Name}</div>
                   </td>

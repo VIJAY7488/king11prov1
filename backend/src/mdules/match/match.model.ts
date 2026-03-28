@@ -7,6 +7,7 @@ import { PlayerRole } from '../team/team.types';
 // ═════════════════════════════════════════════════════════════════════════════
 
 export interface IMatch extends Document {
+  league?: string;
   team1Name: string;
   team2Name: string;
   /** Official squad for team 1 — each element has _id, name, role */
@@ -60,6 +61,12 @@ const squadPlayerSchema = new Schema<SquadPlayer>(
 
 const matchSchema = new Schema<IMatch, IMatchModel>(
   {
+    league: {
+      type: String,
+      trim: true,
+      maxlength: [100, 'League cannot exceed 100 characters'],
+    },
+
     team1Name: {
       type: String,
       required: [true, 'Team 1 name is required'],

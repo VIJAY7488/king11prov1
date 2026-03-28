@@ -20,6 +20,7 @@ export interface SquadPlayer {
 // ── Request DTOs ──────────────────────────────────────────────────────────────
 
 export interface CreateMatchDTO {
+  league?: string;
   team1Name: string;
   team2Name: string;
   team1Players: SquadPlayer[];
@@ -29,6 +30,7 @@ export interface CreateMatchDTO {
 }
 
 export interface UpdateMatchDTO {
+  league?: string;
   team1Name?: string;
   team2Name?: string;
   team1Players?: SquadPlayer[];
@@ -48,6 +50,7 @@ export interface MatchQueryParams {
 
 export interface MatchPublic {
   id: string;
+  league?: string;
   team1Name: string;
   team2Name: string;
   team1Players: SquadPlayer[];
