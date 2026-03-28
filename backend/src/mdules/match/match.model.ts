@@ -78,8 +78,8 @@ const matchSchema = new Schema<IMatch, IMatchModel>(
       type: [squadPlayerSchema],
       validate: [
         {
-          validator: (arr: SquadPlayer[]) => arr.length >= 11 && arr.length <= 15,
-          message: 'Squad must have between 11 and 15 players',
+          validator: (arr: SquadPlayer[]) => arr.length >= 11 && arr.length <= 25,
+          message: 'Squad must have between 11 and 25 players',
         },
       ],
     },
@@ -88,8 +88,8 @@ const matchSchema = new Schema<IMatch, IMatchModel>(
       type: [squadPlayerSchema],
       validate: [
         {
-          validator: (arr: SquadPlayer[]) => arr.length >= 11 && arr.length <= 15,
-          message: 'Squad must have between 11 and 15 players',
+          validator: (arr: SquadPlayer[]) => arr.length >= 11 && arr.length <= 25,
+          message: 'Squad must have between 11 and 25 players',
         },
       ],
     },

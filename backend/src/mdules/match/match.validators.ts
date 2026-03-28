@@ -11,7 +11,7 @@ const squadPlayerSchema = Joi.object({
 const squadArray = Joi.array()
   .items(squadPlayerSchema)
   .min(11)
-  .max(15)
+  .max(25)
   .required();
 
 // Accept:
@@ -42,8 +42,8 @@ export const createMatchSchema = Joi.object({
 export const updateMatchSchema = Joi.object({
   team1Name:    Joi.string().trim().max(100).optional(),
   team2Name:    Joi.string().trim().max(100).optional(),
-  team1Players: Joi.array().items(squadPlayerSchema).min(11).max(15).optional(),
-  team2Players: Joi.array().items(squadPlayerSchema).min(11).max(15).optional(),
+  team1Players: Joi.array().items(squadPlayerSchema).min(11).max(25).optional(),
+  team2Players: Joi.array().items(squadPlayerSchema).min(11).max(25).optional(),
   matchDate:    matchDateSchema.optional(),
   venue:        Joi.string().trim().max(200).optional().allow(''),
   status:       Joi.string().valid(...Object.values(MatchStatus)).optional(),

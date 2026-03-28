@@ -20,6 +20,8 @@ interface PlayerEntry {
 }
 
 const PLAYER_ROLES = ["WICKET_KEEPER", "BATSMAN", "ALL_ROUNDER", "BOWLER"];
+const MIN_SQUAD_PLAYERS = 11;
+const MAX_SQUAD_PLAYERS = 25;
 
 const STATUS_COLOR: Record<string, string> = {
   UPCOMING: "#F59E0B", LIVE: "#EF4444", COMPLETED: "#10B981", CANCELLED: "#6B7280",
@@ -94,8 +96,8 @@ function SquadEditor({ label, players, onChange }: {
   function add()    { onChange([...players, emptyPlayer()]); }
   function remove(i: number) { onChange(players.filter((_, idx) => idx !== i)); }
   function addElevenSlots() {
-    if (players.length >= 11) return;
-    const needed = Math.min(11 - players.length, 15 - players.length);
+    if (players.length >= MIN_SQUAD_PLAYERS) return;
+    const needed = Math.min(MIN_SQUAD_PLAYERS - players.length, MAX_SQUAD_PLAYERS - players.length);
     onChange([...players, ...Array.from({ length: needed }, () => emptyPlayer())]);
   }
   function autofillIds() {
@@ -115,7 +117,7 @@ function SquadEditor({ label, players, onChange }: {
 
     const next: PlayerEntry[] = [...players];
     for (const line of lines) {
-      if (next.length >= 15) break;
+      if (next.length >= MAX_SQUAD_PLAYERS) break;
 
       const parts = line.split(/[,\t|]/).map((p) => p.trim()).filter(Boolean);
       if (!parts.length) continue;
@@ -141,7 +143,7 @@ function SquadEditor({ label, players, onChange }: {
       next.push({ _id, name, role });
     }
 
-    onChange(next.slice(0, 15));
+    onChange(next.slice(0, MAX_SQUAD_PLAYERS));
     setBulkText("");
   }
 
@@ -149,14 +151,14 @@ function SquadEditor({ label, players, onChange }: {
     <div style={{ background: "#0F0F0F", border: "1px solid #2A2A2A", borderRadius: 10, padding: 16, marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: "#aaa" }}>
-          {label} <span style={{ color: players.length >= 11 ? "#10B981" : "#EF4444", fontSize: 11, marginLeft: 6 }}>({players.length}/11–15 players)</span>
+          {label} <span style={{ color: players.length >= MIN_SQUAD_PLAYERS ? "#10B981" : "#EF4444", fontSize: 11, marginLeft: 6 }}>({players.length}/{MIN_SQUAD_PLAYERS}–{MAX_SQUAD_PLAYERS} players)</span>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={addElevenSlots} disabled={players.length >= 11}
+          <button onClick={addElevenSlots} disabled={players.length >= MIN_SQUAD_PLAYERS}
             style={{ padding: "4px 10px", border: "1px solid #2A2A2A", borderRadius: 6, background: "#141414", color: "#bbb", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
             +11 Slots
           </button>
-          <button onClick={add} disabled={players.length >= 15}
+          <button onClick={add} disabled={players.length >= MAX_SQUAD_PLAYERS}
             style={{ padding: "4px 12px", border: "none", borderRadius: 6, background: "#EA4800", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
             + Add
           </button>
