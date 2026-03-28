@@ -28,7 +28,7 @@ const config = {
     process.env.JWT_REFRESH_SECRET ?? "refresh_change_me_in_production",
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? "30d",
   cookieDomain: process.env.COOKIE_DOMAIN ?? "",
-  corsOrigins: (process.env.CORS_ORIGINS ?? "hhttps://king11pro.live")
+  corsOrigins: (process.env.CORS_ORIGINS ?? "https://king11pro.live")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
