@@ -22,7 +22,7 @@ interface BookRow {
   quantity: number;
 }
 
-const marketIdOf = (m: MarketItem): string => m.id ?? m._id ?? "";
+const marketIdOf = (m?: MarketItem | null): string => (m?.id ?? m?._id ?? "");
 
 export default function PredictPage() {
   const navigate = useNavigate();
@@ -64,10 +64,14 @@ export default function PredictPage() {
           params: { status: "OPEN", page: 1, limit: 20, sortBy: "closeAt", sortOrder: "asc" },
           cache: { ttlMs: 15_000, key: "predict-markets" },
         });
-        const rows: MarketItem[] = res.data?.data?.markets ?? [];
+        const rowsRaw = res.data?.data?.markets;
+        const rows: MarketItem[] = Array.isArray(rowsRaw) ? rowsRaw : [];
         if (!active) return;
         setMarkets(rows);
-        setSelectedMarketId((prev) => prev || marketIdOf(rows[0] as MarketItem));
+        setSelectedMarketId((prev) => {
+          if (prev) return prev;
+          return marketIdOf(rows[0]);
+        });
         setError(null);
       } catch (err) {
         if (!active) return;
