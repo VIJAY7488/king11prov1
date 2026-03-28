@@ -41,7 +41,7 @@ const Homepage = () => {
       if (!token) {
         const contestRes = await api.get("/contests?limit=12");
         const allContests: Contest[] = contestRes.data?.data?.contests ?? [];
-        setMatches(extractLiveUpcomingMatches(allContests).filter((m) => m.status === "UPCOMING").slice(0, 6));
+        setMatches(extractLiveUpcomingMatches(allContests));
         setReferralSummary(null);
         hasData = true;
       } else {
@@ -55,7 +55,7 @@ const Homepage = () => {
 
         if (matchRes.status === "fulfilled") {
           const allMatches: MatchFromApi[] = matchRes.value.data?.data?.matches ?? [];
-          setMatches(allMatches.filter((m) => m.status === "UPCOMING").slice(0, 6));
+          setMatches(allMatches.filter((m) => m.status === "LIVE" || m.status === "UPCOMING"));
           hasData = true;
         } else {
           setMatches([]);
@@ -67,7 +67,7 @@ const Homepage = () => {
         }
 
         if (matchRes.status !== "fulfilled" && allContests.length > 0) {
-          setMatches(extractLiveUpcomingMatches(allContests).filter((m) => m.status === "UPCOMING").slice(0, 6));
+          setMatches(extractLiveUpcomingMatches(allContests));
           hasData = true;
         }
 
