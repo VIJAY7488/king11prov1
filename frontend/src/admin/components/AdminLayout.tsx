@@ -5,6 +5,7 @@ const NAV = [
   { to: "/admin",          icon: "🏠", label: "Dashboard",     end: true },
   { to: "/admin/matches",  icon: "🏏", label: "Matches"                  },
   { to: "/admin/contests", icon: "🏆", label: "Contests"                 },
+  { to: "/admin/markets",  icon: "📈", label: "Markets"                  },
   { to: "/admin/deposits", icon: "💳", label: "Deposits"                 },
   { to: "/admin/withdrawals", icon: "💸", label: "Withdrawals"            },
   { to: "/admin/scoring",  icon: "📊", label: "Live Scoring"             },

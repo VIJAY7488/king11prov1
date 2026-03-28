@@ -54,6 +54,7 @@ const AdminLoginPage = lazy(() => import("./admin/pages/AdminLoginPage"));
 const AdminDashboard = lazy(() => import("./admin/pages/AdminDashboard"));
 const AdminMatchesPage = lazy(() => import("./admin/pages/AdminMatchesPage"));
 const AdminContestsPage = lazy(() => import("./admin/pages/AdminContestsPage"));
+const AdminMarketsPage = lazy(() => import("./admin/pages/AdminMarketsPage"));
 const AdminDepositsPage = lazy(() => import("./admin/pages/AdminDepositsPage"));
 const AdminWithdrawalsPage = lazy(() => import("./admin/pages/AdminWithdrawalsPage"));
 const AdminScoringPage = lazy(() => import("./admin/pages/AdminScoringPage"));
@@ -173,6 +174,7 @@ export default function App() {
               <Route index          element={<AdminDashboard    />} />
               <Route path="matches"  element={<AdminMatchesPage  />} />
               <Route path="contests" element={<AdminContestsPage />} />
+              <Route path="markets" element={<AdminMarketsPage />} />
               <Route path="deposits" element={<AdminDepositsPage />} />
               <Route path="withdrawals" element={<AdminWithdrawalsPage />} />
               <Route path="scoring"  element={<AdminScoringPage  />} />
