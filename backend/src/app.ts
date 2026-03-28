@@ -36,10 +36,10 @@ const createApp = ():Application => {
       optionsSuccessStatus: 204,
     };
 
-    app.use(
-        cors(corsDelegate)
-    );
-    app.use(cors(corsDelegate));
+    const corsMiddleware = cors(corsDelegate);
+    app.use(corsMiddleware);
+    // Explicitly answer CORS preflight for all routes.
+    app.options(/.*/, corsMiddleware);
 
 
 
