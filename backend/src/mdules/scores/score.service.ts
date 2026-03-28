@@ -272,6 +272,11 @@ const toPublic = (s: IPlayerScore): PlayerScorePublic => {
   };
 };
 
+const findSquadPlayer = (
+  squad: Array<{ _id?: unknown; name?: string; role?: string } | null | undefined>,
+  playerId: string
+) => squad.find((player) => player && typeof player._id === 'string' && player._id === playerId) ?? null;
+
 // ═════════════════════════════════════════════════════════════════════════════
 // LEADERBOARD RECALCULATION
 // Only recalculates teams that contain at least one of the affected players.
@@ -489,8 +494,14 @@ export class ScoreService {
         inc: Record<string, number>,
         set?: Record<string, unknown>
       ): Promise<IPlayerScore> => {
-        const t1 = match.team1Players.find(p => p._id.toString() === playerId);
-        const t2 = match.team2Players.find(p => p._id.toString() === playerId);
+        const t1 = findSquadPlayer(
+          match.team1Players as Array<{ _id?: unknown; name?: string; role?: string } | null | undefined>,
+          playerId
+        );
+        const t2 = findSquadPlayer(
+          match.team2Players as Array<{ _id?: unknown; name?: string; role?: string } | null | undefined>,
+          playerId
+        );
         const mp = t1 ?? t2;
         if (!mp) throw new AppError(`Player "${playerId}" not found in this match.`, 404);
 
@@ -641,8 +652,14 @@ export class ScoreService {
     const match = await Match.findById(dto.matchId);
     if (!match) throw new AppError('Match not found.', 404);
 
-    const t1 = match.team1Players.find(p => p._id.toString() === dto.playerId);
-    const t2 = match.team2Players.find(p => p._id.toString() === dto.playerId);
+    const t1 = findSquadPlayer(
+      match.team1Players as Array<{ _id?: unknown; name?: string; role?: string } | null | undefined>,
+      dto.playerId
+    );
+    const t2 = findSquadPlayer(
+      match.team2Players as Array<{ _id?: unknown; name?: string; role?: string } | null | undefined>,
+      dto.playerId
+    );
     const mp = t1 ?? t2;
     if (!mp) throw new AppError('Player not found in this match.', 404);
 
