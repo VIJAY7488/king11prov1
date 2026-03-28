@@ -23,6 +23,7 @@ interface MatchInfo {
 
 // Keep this list aligned with backend DismissalType enum.
 const DISMISSAL_TYPES = ["BOWLED", "CAUGHT", "LBW", "RUN_OUT", "STUMPED", "HIT_WICKET"];
+const NON_DISMISSAL_TYPES = new Set(["RETIRED_HURT", "NOT_OUT", "DID_NOT_BAT"]);
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
@@ -93,6 +94,11 @@ function pickDefaultsFromPlayers(players: Player[], team: "team1" | "team2"): {
   return { batter, bowler, fielder };
 }
 
+function shouldRemoveBatterAfterWicket(isOut: boolean, dismissal: string): boolean {
+  if (!isOut) return false;
+  return !NON_DISMISSAL_TYPES.has((dismissal || "").toUpperCase());
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function AdminScoringPage() {
@@ -103,6 +109,10 @@ export default function AdminScoringPage() {
   const [matchError, setMatchError] = useState("");
   const [players, setPlayers] = useState<Player[]>([]);
   const [battingTeam, setBattingTeam] = useState<"team1" | "team2" | null>(null);
+  const [lineupMap, setLineupMap] = useState<Record<string, boolean>>({});
+  const [lineupSaved, setLineupSaved] = useState(false);
+  const [lineupSaving, setLineupSaving] = useState(false);
+  const [dismissedMap, setDismissedMap] = useState<Record<string, boolean>>({});
 
   // Player Selection
   const [batter,  setBatter]  = useState<Player | null>(null);
@@ -143,6 +153,12 @@ export default function AdminScoringPage() {
   const mandatoryExtras = (isWide ? 1 : 0) + (isNoBall ? 1 : 0);
   const totalRunsThisBall = batterRuns + legByeRuns + overthrowExtra + mandatoryExtras;
 
+  const team1SquadPlayers = players.filter((p) => p.team === "team1");
+  const team2SquadPlayers = players.filter((p) => p.team === "team2");
+  const team1LineupCount = team1SquadPlayers.filter((p) => lineupMap[p._id]).length;
+  const team2LineupCount = team2SquadPlayers.filter((p) => lineupMap[p._id]).length;
+  const playingPlayers = players.filter((p) => lineupMap[p._id]);
+
   // ── Load match + players ───────────────────────────────────────────────────
 
   async function loadMatch() {
@@ -150,9 +166,11 @@ export default function AdminScoringPage() {
     setLoadingMatch(true); setMatchError(""); setMatch(null); setPlayers([]);
     setBatter(null); setBowler(null); setFielder(null);
     setBatterSearch(""); setBowlerSearch(""); setFielderSearch("");
+    setLineupMap({}); setLineupSaved(false); setDismissedMap({});
     try {
       const res = await api.get(`/matches/${matchIdInput.trim()}`);
       const m: MatchInfo = res.data?.data?.match ?? res.data?.data;
+      const matchId = m.id ?? m._id ?? "";
       setMatch(m);
       const all: Player[] = [
         ...normalizeSquadPlayers(m.team1Players, "team1", m.team1Name),
@@ -164,10 +182,47 @@ export default function AdminScoringPage() {
         setBattingTeam(null);
       } else {
         setBattingTeam("team1");
-        const defaults = pickDefaultsFromPlayers(all, "team1");
-        setBatter(defaults.batter);
-        setBowler(defaults.bowler);
-        setFielder(defaults.fielder);
+
+        // Load previously saved lineup (if already configured).
+        let initialLineup: Record<string, boolean> = {};
+        let initialDismissed: Record<string, boolean> = {};
+        if (matchId) {
+          try {
+            const scoreRes = await api.get(`/scores/match/${matchId}`);
+            const scoreRows = [
+              ...(scoreRes.data?.data?.team1 ?? []),
+              ...(scoreRes.data?.data?.team2 ?? []),
+            ];
+            for (const row of scoreRows as any[]) {
+              if (row?.isAnnouncedInLineup && typeof row?.playerId === "string") {
+                initialLineup[row.playerId] = true;
+              }
+              if (
+                typeof row?.playerId === "string" &&
+                shouldRemoveBatterAfterWicket(Boolean(row?.isOut), String(row?.dismissalType ?? ""))
+              ) {
+                initialDismissed[row.playerId] = true;
+              }
+            }
+          } catch {
+            // Lineup may not be initialized yet — start with empty selection.
+          }
+        }
+        setLineupMap(initialLineup);
+        setDismissedMap(initialDismissed);
+        const t1Selected = all.filter((p) => p.team === "team1" && initialLineup[p._id]).length;
+        const t2Selected = all.filter((p) => p.team === "team2" && initialLineup[p._id]).length;
+        const hasCompleteLineup = t1Selected === 11 && t2Selected === 11;
+        setLineupSaved(hasCompleteLineup);
+        if (hasCompleteLineup) {
+          const defaults = pickDefaultsFromPlayers(
+            all.filter((p) => initialLineup[p._id] && !initialDismissed[p._id]),
+            "team1"
+          );
+          setBatter(defaults.batter);
+          setBowler(defaults.bowler);
+          setFielder(defaults.fielder);
+        }
       }
     } catch (e: any) {
       setMatchError(e?.response?.data?.message ?? "Match not found");
@@ -311,6 +366,13 @@ export default function AdminScoringPage() {
       const updatedPlayers: any[] = res?.data?.data?.updatedPlayers ?? [];
       const updatedBatter = updatedPlayers.find((p) => p?.playerId === batter._id);
       const updatedBowler = updatedPlayers.find((p) => p?.playerId === bowler._id);
+      if (battingTeam && shouldRemoveBatterAfterWicket(isOut, dismissalType)) {
+        const dismissedBatterId = batter._id;
+        setDismissedMap((prev) => ({ ...prev, [dismissedBatterId]: true }));
+        const nextBatter =
+          battingPlayers.find((p) => p._id !== dismissedBatterId && !dismissedMap[p._id]) ?? null;
+        setBatter(nextBatter);
+      }
       const runOutKind = dismissalType === "RUN_OUT" ? (isDirectRunOut ? " DIRECT-HIT" : " INDIRECT") : "";
       const desc = `Over ${over}.${ball}: ${batter.name} ${totalRunsThisBall} run(s)${isLegBye ? ` (${runs} LEG-BYE)` : ""}${isWide ? " [WIDE]" : ""}${isNoBall ? " [NO-BALL]" : ""}${isOut ? ` OUT (${dismissalType}${runOutKind})` : ""} | Bowl: ${bowler.name}`;
       setLog((prev) => [desc, ...prev].slice(0, 30));
@@ -342,17 +404,65 @@ export default function AdminScoringPage() {
     finally { setConfirming(false); }
   }
 
-  const battingPlayers = battingTeam ? players.filter((p) => p.team === battingTeam) : [];
-  const bowlingPlayers = battingTeam ? players.filter((p) => p.team !== battingTeam) : players;
-  const filteredBattingPlayers = battingPlayers.filter((p) => p.name.toLowerCase().includes(batterSearch.toLowerCase()));
+  const battingPlayers = battingTeam ? playingPlayers.filter((p) => p.team === battingTeam) : [];
+  const availableBattingPlayers = battingPlayers.filter((p) => !dismissedMap[p._id]);
+  const bowlingPlayers = battingTeam ? playingPlayers.filter((p) => p.team !== battingTeam) : playingPlayers;
+  const filteredBattingPlayers = availableBattingPlayers.filter((p) => p.name.toLowerCase().includes(batterSearch.toLowerCase()));
   const filteredBowlingPlayers = bowlingPlayers.filter((p) => p.name.toLowerCase().includes(bowlerSearch.toLowerCase()));
   const filteredFieldingPlayers = bowlingPlayers.filter((p) => p.name.toLowerCase().includes(fielderSearch.toLowerCase()));
 
-  function pickDefaultPlayers(team: "team1" | "team2") {
-    const defaults = pickDefaultsFromPlayers(players, team);
+  function pickDefaultPlayers(team: "team1" | "team2", sourcePlayers: Player[] = playingPlayers) {
+    const filteredSource = sourcePlayers.filter((p) => p.team !== team || !dismissedMap[p._id]);
+    const defaults = pickDefaultsFromPlayers(filteredSource, team);
     setBatter(defaults.batter);
     setBowler(defaults.bowler);
     setFielder(defaults.fielder);
+  }
+
+  function toggleLineupPlayer(player: Player) {
+    const isSelected = Boolean(lineupMap[player._id]);
+    if (!isSelected) {
+      if (player.team === "team1" && team1LineupCount >= 11) {
+        setError("Team 1 already has 11 players selected.");
+        return;
+      }
+      if (player.team === "team2" && team2LineupCount >= 11) {
+        setError("Team 2 already has 11 players selected.");
+        return;
+      }
+    }
+    setLineupMap((prev) => ({ ...prev, [player._id]: !prev[player._id] }));
+    setLineupSaved(false);
+    setError("");
+  }
+
+  async function saveLineup() {
+    if (!match) { setError("Load a match first."); return; }
+    const matchId = match.id ?? match._id ?? "";
+    if (!matchId) { setError("Match ID is missing. Reload match and try again."); return; }
+    if (team1LineupCount !== 11 || team2LineupCount !== 11) {
+      setError("Select exactly 11 players from each team to lock lineup.");
+      return;
+    }
+
+    setLineupSaving(true); setError(""); setSuccess("");
+    try {
+      await Promise.all(players.map((p) =>
+        api.post("/scores/set-player", {
+          matchId,
+          playerId: p._id,
+          isAnnouncedInLineup: Boolean(lineupMap[p._id]),
+        })
+      ));
+      setLineupSaved(true);
+      const sourcePlayers = players.filter((p) => lineupMap[p._id]);
+      if (battingTeam) pickDefaultPlayers(battingTeam, sourcePlayers);
+      setSuccess("✅ Playing XI saved. Ball scoring unlocked.");
+    } catch (e: any) {
+      setError(e?.response?.data?.message ?? "Failed to save playing XI lineup.");
+    } finally {
+      setLineupSaving(false);
+    }
   }
 
   function switchBattingTeam(team: "team1" | "team2") {
@@ -360,13 +470,19 @@ export default function AdminScoringPage() {
     setBatterSearch("");
     setBowlerSearch("");
     setFielderSearch("");
-    pickDefaultPlayers(team);
+    if (lineupSaved) pickDefaultPlayers(team);
   }
 
   useEffect(() => {
     if (!battingTeam) return;
-    const validBatters = players.filter((p) => p.team === battingTeam);
-    const validBowlers = players.filter((p) => p.team !== battingTeam);
+    if (!lineupSaved) {
+      setBatter(null);
+      setBowler(null);
+      setFielder(null);
+      return;
+    }
+    const validBatters = playingPlayers.filter((p) => p.team === battingTeam && !dismissedMap[p._id]);
+    const validBowlers = playingPlayers.filter((p) => p.team !== battingTeam);
 
     if (!batter || !validBatters.some((p) => p._id === batter._id)) {
       setBatter(preferredPlayer(validBatters, ["BATSMAN", "WICKET_KEEPER", "ALL_ROUNDER"]));
@@ -377,7 +493,7 @@ export default function AdminScoringPage() {
     if (fielder && !validBowlers.some((p) => p._id === fielder._id)) {
       setFielder(null);
     }
-  }, [players, battingTeam, batter, bowler, fielder]);
+  }, [playingPlayers, dismissedMap, battingTeam, lineupSaved, batter, bowler, fielder]);
 
   return (
     <div style={{ padding: "28px 32px", maxWidth: 1200 }}>
@@ -447,25 +563,121 @@ export default function AdminScoringPage() {
       </div>
 
       {match && (
+        <>
+          <div style={S.section}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#aaa", marginBottom: 12 }}>② Select Playing XI</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ background: "#0F0F0F", border: "1px solid #2A2A2A", borderRadius: 10, padding: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ color: "#ddd", fontWeight: 800, fontSize: 12 }}>{match.team1Name}</span>
+                  <span style={{ color: team1LineupCount === 11 ? "#10B981" : "#F59E0B", fontWeight: 900, fontSize: 12 }}>
+                    {team1LineupCount}/11
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {team1SquadPlayers.map((p) => {
+                    const selected = Boolean(lineupMap[p._id]);
+                    return (
+                      <button
+                        key={`lineup-team1-${p._id}`}
+                        onClick={() => toggleLineupPlayer(p)}
+                        style={{
+                          border: `1px solid ${selected ? "#10B981" : "#2A2A2A"}`,
+                          background: selected ? "rgba(16,185,129,.15)" : "#141414",
+                          color: selected ? "#34D399" : "#bbb",
+                          borderRadius: 999,
+                          padding: "4px 8px",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {p.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ background: "#0F0F0F", border: "1px solid #2A2A2A", borderRadius: 10, padding: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ color: "#ddd", fontWeight: 800, fontSize: 12 }}>{match.team2Name}</span>
+                  <span style={{ color: team2LineupCount === 11 ? "#10B981" : "#F59E0B", fontWeight: 900, fontSize: 12 }}>
+                    {team2LineupCount}/11
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {team2SquadPlayers.map((p) => {
+                    const selected = Boolean(lineupMap[p._id]);
+                    return (
+                      <button
+                        key={`lineup-team2-${p._id}`}
+                        onClick={() => toggleLineupPlayer(p)}
+                        style={{
+                          border: `1px solid ${selected ? "#10B981" : "#2A2A2A"}`,
+                          background: selected ? "rgba(16,185,129,.15)" : "#141414",
+                          color: selected ? "#34D399" : "#bbb",
+                          borderRadius: 999,
+                          padding: "4px 8px",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {p.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 12, color: lineupSaved ? "#10B981" : "#F59E0B", fontWeight: 700 }}>
+                {lineupSaved
+                  ? "Playing XI locked. You can start scoring."
+                  : "Pick exactly 11 players from each team, then click Save Lineup."}
+              </div>
+              <button
+                onClick={saveLineup}
+                disabled={lineupSaving || team1LineupCount !== 11 || team2LineupCount !== 11}
+                style={{
+                  padding: "8px 14px",
+                  border: "none",
+                  borderRadius: 8,
+                  background: (lineupSaving || team1LineupCount !== 11 || team2LineupCount !== 11) ? "#1A1A1A" : "#10B981",
+                  color: (lineupSaving || team1LineupCount !== 11 || team2LineupCount !== 11) ? "#555" : "#fff",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  cursor: (lineupSaving || team1LineupCount !== 11 || team2LineupCount !== 11) ? "not-allowed" : "pointer",
+                }}
+              >
+                {lineupSaving ? "Saving..." : "Save Playing XI"}
+              </button>
+            </div>
+          </div>
+
         <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16 }}>
 
           {/* ── Player Panel ── */}
           <div style={S.section}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "#aaa", marginBottom: 12 }}>② Players</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#aaa", marginBottom: 12 }}>③ Players</div>
 
             <div style={{ display: "grid", gap: 10 }}>
               <div>
                 <label style={S.label}>Batter</label>
                 <input
+                  disabled={!lineupSaved}
                   value={batterSearch}
                   onChange={(e) => setBatterSearch(e.target.value)}
                   placeholder="Search batter..."
                   style={{ ...S.input, marginBottom: 6 }}
                 />
                 <select
+                  disabled={!lineupSaved}
                   value={batter?._id ?? ""}
                   onChange={(e) => {
-                    const p = battingPlayers.find((x) => x._id === e.target.value) ?? null;
+                    const p = availableBattingPlayers.find((x) => x._id === e.target.value) ?? null;
                     setBatter(p);
                   }}
                   style={{ ...S.input, appearance: "none" as const }}
@@ -479,6 +691,7 @@ export default function AdminScoringPage() {
                   {filteredBattingPlayers.slice(0, 12).map((p) => (
                     <button
                       key={`bat-chip-${p._id}`}
+                      disabled={!lineupSaved}
                       onClick={() => setBatter(p)}
                       style={{
                         border: `1px solid ${batter?._id === p._id ? "#EA4800" : "#2A2A2A"}`,
@@ -488,23 +701,30 @@ export default function AdminScoringPage() {
                         padding: "4px 8px",
                         fontSize: 11,
                         fontWeight: 700,
-                        cursor: "pointer",
+                        cursor: lineupSaved ? "pointer" : "not-allowed",
                       }}
                     >
                       {p.name}
                     </button>
                   ))}
                 </div>
+                {lineupSaved && availableBattingPlayers.length === 0 && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: "#F59E0B" }}>
+                    All selected batters from this team are out.
+                  </div>
+                )}
               </div>
               <div>
                 <label style={S.label}>Bowler</label>
                 <input
+                  disabled={!lineupSaved}
                   value={bowlerSearch}
                   onChange={(e) => setBowlerSearch(e.target.value)}
                   placeholder="Search bowler..."
                   style={{ ...S.input, marginBottom: 6 }}
                 />
                 <select
+                  disabled={!lineupSaved}
                   value={bowler?._id ?? ""}
                   onChange={(e) => {
                     const p = bowlingPlayers.find((x) => x._id === e.target.value) ?? null;
@@ -521,6 +741,7 @@ export default function AdminScoringPage() {
                   {filteredBowlingPlayers.slice(0, 12).map((p) => (
                     <button
                       key={`bowl-chip-${p._id}`}
+                      disabled={!lineupSaved}
                       onClick={() => setBowler(p)}
                       style={{
                         border: `1px solid ${bowler?._id === p._id ? "#EA4800" : "#2A2A2A"}`,
@@ -530,7 +751,7 @@ export default function AdminScoringPage() {
                         padding: "4px 8px",
                         fontSize: 11,
                         fontWeight: 700,
-                        cursor: "pointer",
+                        cursor: lineupSaved ? "pointer" : "not-allowed",
                       }}
                     >
                       {p.name}
@@ -541,12 +762,14 @@ export default function AdminScoringPage() {
               <div>
                 <label style={S.label}>Fielder (Optional)</label>
                 <input
+                  disabled={!lineupSaved}
                   value={fielderSearch}
                   onChange={(e) => setFielderSearch(e.target.value)}
                   placeholder="Search fielder..."
                   style={{ ...S.input, marginBottom: 6 }}
                 />
                 <select
+                  disabled={!lineupSaved}
                   value={fielder?._id ?? ""}
                   onChange={(e) => {
                     const p = bowlingPlayers.find((x) => x._id === e.target.value) ?? null;
@@ -568,7 +791,8 @@ export default function AdminScoringPage() {
               <div style={{ color: "#9CA3AF", fontWeight: 600 }}>Fielder: <span style={{ color: "#fff" }}>{fielder?.name ?? "—"}</span></div>
               <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
-                  onClick={() => battingTeam && pickDefaultPlayers(battingTeam)}
+                  disabled={!lineupSaved}
+                  onClick={() => battingTeam && lineupSaved && pickDefaultPlayers(battingTeam)}
                   style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#121212", color: "#ddd", fontSize: 11, fontWeight: 800, cursor: "pointer" }}
                 >
                   Auto Select Players
@@ -580,7 +804,13 @@ export default function AdminScoringPage() {
           {/* ── Ball Event Panel ── */}
           <div>
             <div style={S.section}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#aaa", marginBottom: 12 }}>③ Ball Event — {over}.{ball}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#aaa", marginBottom: 12 }}>④ Ball Event — {over}.{ball}</div>
+
+              {!lineupSaved && (
+                <div style={{ background: "rgba(245,158,11,.12)", border: "1px solid rgba(245,158,11,.3)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#FCD34D", marginBottom: 12 }}>
+                  Save Playing XI first to unlock ball scoring.
+                </div>
+              )}
 
               {error   && <div style={{ background: "rgba(239,68,68,.1)", border: "1px solid rgba(239,68,68,.3)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#FCA5A5", marginBottom: 12 }}>⚠️ {error}</div>}
               {success && <div style={{ background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.3)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#6EE7B7", marginBottom: 12 }}>{success}</div>}
@@ -589,16 +819,16 @@ export default function AdminScoringPage() {
               <div style={{ marginBottom: 14 }}>
                 <label style={S.label}>Quick Actions</label>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  <button onClick={() => applyQuickEvent("DOT")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Dot</button>
-                  <button onClick={() => applyQuickEvent("ONE")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>1 Run</button>
-                  <button onClick={() => applyQuickEvent("TWO")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>2 Runs</button>
-                  <button onClick={() => applyQuickEvent("FOUR")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #EA4800", background: "rgba(234,72,0,.12)", color: "#EA4800", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Four</button>
-                  <button onClick={() => applyQuickEvent("SIX")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #EA4800", background: "rgba(234,72,0,.12)", color: "#EA4800", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Six</button>
-                  <button onClick={() => applyQuickEvent("WIDE")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Wide</button>
-                  <button onClick={() => applyQuickEvent("NO_BALL")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>No Ball</button>
-                  <button onClick={() => applyQuickEvent("LEG_BYE_1")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Leg Bye +1</button>
-                  <button onClick={() => applyQuickEvent("WICKET")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #EF4444", background: "rgba(239,68,68,.12)", color: "#EF4444", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Wicket</button>
-                  <button onClick={resetBallForm} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "transparent", color: "#777", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Reset Ball</button>
+                  <button disabled={!lineupSaved} onClick={() => applyQuickEvent("DOT")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: lineupSaved ? "pointer" : "not-allowed" }}>Dot</button>
+                  <button disabled={!lineupSaved} onClick={() => applyQuickEvent("ONE")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: lineupSaved ? "pointer" : "not-allowed" }}>1 Run</button>
+                  <button disabled={!lineupSaved} onClick={() => applyQuickEvent("TWO")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: lineupSaved ? "pointer" : "not-allowed" }}>2 Runs</button>
+                  <button disabled={!lineupSaved} onClick={() => applyQuickEvent("FOUR")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #EA4800", background: "rgba(234,72,0,.12)", color: "#EA4800", fontSize: 12, fontWeight: 800, cursor: lineupSaved ? "pointer" : "not-allowed" }}>Four</button>
+                  <button disabled={!lineupSaved} onClick={() => applyQuickEvent("SIX")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #EA4800", background: "rgba(234,72,0,.12)", color: "#EA4800", fontSize: 12, fontWeight: 800, cursor: lineupSaved ? "pointer" : "not-allowed" }}>Six</button>
+                  <button disabled={!lineupSaved} onClick={() => applyQuickEvent("WIDE")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: lineupSaved ? "pointer" : "not-allowed" }}>Wide</button>
+                  <button disabled={!lineupSaved} onClick={() => applyQuickEvent("NO_BALL")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: lineupSaved ? "pointer" : "not-allowed" }}>No Ball</button>
+                  <button disabled={!lineupSaved} onClick={() => applyQuickEvent("LEG_BYE_1")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "#0F0F0F", color: "#ddd", fontSize: 12, fontWeight: 800, cursor: lineupSaved ? "pointer" : "not-allowed" }}>Leg Bye +1</button>
+                  <button disabled={!lineupSaved} onClick={() => applyQuickEvent("WICKET")} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #EF4444", background: "rgba(239,68,68,.12)", color: "#EF4444", fontSize: 12, fontWeight: 800, cursor: lineupSaved ? "pointer" : "not-allowed" }}>Wicket</button>
+                  <button disabled={!lineupSaved} onClick={resetBallForm} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #2A2A2A", background: "transparent", color: "#777", fontSize: 12, fontWeight: 800, cursor: lineupSaved ? "pointer" : "not-allowed" }}>Reset Ball</button>
                 </div>
               </div>
 
@@ -607,8 +837,8 @@ export default function AdminScoringPage() {
                 <label style={S.label}>{isLegBye ? "Leg Bye Runs" : "Runs Scored by Batter"}</label>
                 <div style={{ display: "flex", gap: 6 }}>
                   {[0, 1, 2, 3, 4, 5, 6].map((r) => (
-                    <button key={r} onClick={() => { setRuns(r); if (!isLegBye) { if (r === 4) setIsFour(true); if (r === 6) setIsSix(true); if (r !== 4) setIsFour(false); if (r !== 6) setIsSix(false); } }}
-                      style={{ flex: 1, height: 44, borderRadius: 8, border: `2px solid ${runs === r ? "#EA4800" : "#2A2A2A"}`, background: runs === r ? "rgba(234,72,0,.15)" : "#0F0F0F", color: runs === r ? "#EA4800" : "#666", fontWeight: 900, fontSize: 16, cursor: "pointer" }}>
+                    <button disabled={!lineupSaved} key={r} onClick={() => { setRuns(r); if (!isLegBye) { if (r === 4) setIsFour(true); if (r === 6) setIsSix(true); if (r !== 4) setIsFour(false); if (r !== 6) setIsSix(false); } }}
+                      style={{ flex: 1, height: 44, borderRadius: 8, border: `2px solid ${runs === r ? "#EA4800" : "#2A2A2A"}`, background: runs === r ? "rgba(234,72,0,.15)" : "#0F0F0F", color: runs === r ? "#EA4800" : "#666", fontWeight: 900, fontSize: 16, cursor: lineupSaved ? "pointer" : "not-allowed" }}>
                       {r}
                     </button>
                   ))}
@@ -620,11 +850,11 @@ export default function AdminScoringPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
                 <div>
                   <label style={S.label}>Over Number</label>
-                  <input type="number" min={0} max={49} value={over} onChange={(e) => setOver(Number(e.target.value))} style={S.input} />
+                  <input disabled={!lineupSaved} type="number" min={0} max={49} value={over} onChange={(e) => setOver(Number(e.target.value))} style={S.input} />
                 </div>
                 <div>
                   <label style={S.label}>Ball Number (1–6)</label>
-                  <input type="number" min={1} max={6} value={ball} onChange={(e) => setBallN(Number(e.target.value))} style={S.input} />
+                  <input disabled={!lineupSaved} type="number" min={1} max={6} value={ball} onChange={(e) => setBallN(Number(e.target.value))} style={S.input} />
                 </div>
               </div>
 
@@ -632,22 +862,25 @@ export default function AdminScoringPage() {
               <div style={{ marginBottom: 14 }}>
                 <label style={S.label}>Delivery Type</label>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  <Toggle label="Wide"    on={isWide}   onChange={setIsWide} />
-                  <Toggle label="No Ball" on={isNoBall} onChange={setIsNoBall} />
-                  <Toggle label="Leg Bye" on={isLegBye} onChange={(v) => { setIsLegBye(v); if (v) { setIsFour(false); setIsSix(false); } }} />
-                  <Toggle label="Four" on={isFour}   onChange={(v) => { if (isLegBye) return; setIsFour(v); if (v) setRuns(4); }} />
-                  <Toggle label="Six"  on={isSix}    onChange={(v) => { if (isLegBye) return; setIsSix(v);  if (v) setRuns(6); }} />
+                  <div style={{ pointerEvents: lineupSaved ? "auto" : "none", opacity: lineupSaved ? 1 : 0.55 }}><Toggle label="Wide"    on={isWide}   onChange={setIsWide} /></div>
+                  <div style={{ pointerEvents: lineupSaved ? "auto" : "none", opacity: lineupSaved ? 1 : 0.55 }}><Toggle label="No Ball" on={isNoBall} onChange={setIsNoBall} /></div>
+                  <div style={{ pointerEvents: lineupSaved ? "auto" : "none", opacity: lineupSaved ? 1 : 0.55 }}><Toggle label="Leg Bye" on={isLegBye} onChange={(v) => { setIsLegBye(v); if (v) { setIsFour(false); setIsSix(false); } }} /></div>
+                  <div style={{ pointerEvents: lineupSaved ? "auto" : "none", opacity: lineupSaved ? 1 : 0.55 }}><Toggle label="Four" on={isFour}   onChange={(v) => { if (isLegBye) return; setIsFour(v); if (v) setRuns(4); }} /></div>
+                  <div style={{ pointerEvents: lineupSaved ? "auto" : "none", opacity: lineupSaved ? 1 : 0.55 }}><Toggle label="Six"  on={isSix}    onChange={(v) => { if (isLegBye) return; setIsSix(v);  if (v) setRuns(6); }} /></div>
                 </div>
               </div>
 
               {/* Wicket */}
               <div style={{ marginBottom: 14 }}>
-                <Toggle label="Wicket / Out" on={isOut} onChange={setIsOut} />
+                <div style={{ pointerEvents: lineupSaved ? "auto" : "none", opacity: lineupSaved ? 1 : 0.55 }}>
+                  <Toggle label="Wicket / Out" on={isOut} onChange={setIsOut} />
+                </div>
                 {isOut && (
                   <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                     <div>
                       <label style={S.label}>Dismissal Type</label>
                       <select
+                        disabled={!lineupSaved}
                         value={dismissalType}
                         onChange={(e) => {
                           const next = e.target.value;
@@ -660,7 +893,9 @@ export default function AdminScoringPage() {
                       </select>
                       {dismissalType === "RUN_OUT" && (
                         <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                          <Toggle label="Direct Hit" on={isDirectRunOut} onChange={setIsDirectRunOut} />
+                          <div style={{ pointerEvents: lineupSaved ? "auto" : "none", opacity: lineupSaved ? 1 : 0.55 }}>
+                            <Toggle label="Direct Hit" on={isDirectRunOut} onChange={setIsDirectRunOut} />
+                          </div>
                           <div style={{ fontSize: 11, color: "#F59E0B" }}>
                             Run-out gives fielding points only (no bowler wicket points).
                           </div>
@@ -678,15 +913,19 @@ export default function AdminScoringPage() {
 
               {/* Overthrow */}
               <div style={{ marginBottom: 20 }}>
-                <Toggle label="Overthrow" on={isOverthrow} onChange={setIsOverthrow} />
+                <div style={{ pointerEvents: lineupSaved ? "auto" : "none", opacity: lineupSaved ? 1 : 0.55 }}>
+                  <Toggle label="Overthrow" on={isOverthrow} onChange={setIsOverthrow} />
+                </div>
                 {isOverthrow && (
                   <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
                     <div style={{ flex: 1 }}>
                       <label style={S.label}>Overthrow Runs</label>
-                      <input type="number" min={1} value={overthrowRuns} onChange={(e) => setOverthrowRuns(Number(e.target.value))} style={S.input} />
+                      <input disabled={!lineupSaved} type="number" min={1} value={overthrowRuns} onChange={(e) => setOverthrowRuns(Number(e.target.value))} style={S.input} />
                     </div>
                     <div style={{ display: "flex", alignItems: "flex-end" }}>
-                      <Toggle label="Boundary" on={overthrowBoundary} onChange={setOverthrowBoundary} />
+                      <div style={{ pointerEvents: lineupSaved ? "auto" : "none", opacity: lineupSaved ? 1 : 0.55 }}>
+                        <Toggle label="Boundary" on={overthrowBoundary} onChange={setOverthrowBoundary} />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -703,15 +942,15 @@ export default function AdminScoringPage() {
                 {isOut ? ` + Wicket (${dismissalType})` : ""}
               </div>
 
-              <button onClick={submitBall} disabled={submitting || !batter || !bowler}
+              <button onClick={submitBall} disabled={!lineupSaved || submitting || !batter || !bowler}
                 style={{ width: "100%", height: 52, border: "none", borderRadius: 10, background: (!batter || !bowler) ? "#1A1A1A" : submitting ? "#5A2D00" : "linear-gradient(135deg,#EA4800,#FF5A1A)", color: (!batter || !bowler) ? "#333" : "#fff", fontWeight: 900, fontSize: 16, cursor: (!batter || !bowler) ? "not-allowed" : "pointer" }}>
-                {submitting ? "Submitting..." : (!batter || !bowler) ? "Select batter + bowler first" : `Submit Ball (${totalRunsThisBall} RUN${totalRunsThisBall === 1 ? "" : "S"}${isWide ? " +WD" : ""}${isNoBall ? " +NB" : ""}${isOut ? " WKT" : ""})`}
+                {submitting ? "Submitting..." : !lineupSaved ? "Save Playing XI First" : (!batter || !bowler) ? "Select batter + bowler first" : `Submit Ball (${totalRunsThisBall} RUN${totalRunsThisBall === 1 ? "" : "S"}${isWide ? " +WD" : ""}${isNoBall ? " +NB" : ""}${isOut ? " WKT" : ""})`}
               </button>
             </div>
 
             {/* ── Confirm Match ── */}
             <div style={{ ...S.section, borderTop: "3px solid #10B981" }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#aaa", marginBottom: 8 }}>④ Confirm Scores</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#aaa", marginBottom: 8 }}>⑤ Confirm Scores</div>
               <p style={{ color: "#555", fontSize: 12, marginBottom: 12 }}>Use this only after match end.</p>
               <button onClick={confirmScores} disabled={confirming} style={{ width: "100%", height: 44, border: "none", borderRadius: 10, background: confirming ? "#064E3B" : "#10B981", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
                 {confirming ? "Confirming..." : "Confirm Match Scores"}
@@ -731,6 +970,7 @@ export default function AdminScoringPage() {
             )}
           </div>
         </div>
+        </>
       )}
     </div>
   );
