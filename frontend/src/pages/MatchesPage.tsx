@@ -62,8 +62,14 @@ export function MatchesPage() {
             .filter(Boolean)
         );
         const all: MatchFromApi[] = matchesRes.data?.data?.matches ?? [];
-        const completedJoinedMatches = all.filter((m) => m.status === "COMPLETED" && joinedIds.has(m.id ?? m._id ?? ""));
-        setMatches(completedJoinedMatches);
+        const visibleMatches = all.filter((m) => {
+          const id = m.id ?? m._id ?? "";
+          if (!id) return false;
+          if (m.status === "LIVE" || m.status === "UPCOMING") return true;
+          if (m.status === "COMPLETED" && joinedIds.has(id)) return true;
+          return false;
+        });
+        setMatches(visibleMatches);
       } catch (err) {
         setError(getErrorMessage(err, "Failed to load matches"));
       } finally {
