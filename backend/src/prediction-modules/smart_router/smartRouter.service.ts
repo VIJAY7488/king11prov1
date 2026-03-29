@@ -161,8 +161,7 @@ class SmartRouterService {
             };
           }
 
-          // If AMM is unavailable but user submitted a limit price, place a resting order on book.
-          if (typeof dto.optionalLimitPrice === 'number') {
+          const placePassiveOrder = async (passivePrice: number): Promise<SmartRouteExecutionResult> => {
             const passiveOrder = await orderbookService.placeOrderWithOptions(
               userId,
               {
@@ -170,7 +169,7 @@ class SmartRouterService {
                 outcome: orderOutcome,
                 side: dto.type,
                 orderType: OrderType.LIMIT,
-                price: dto.optionalLimitPrice,
+                price: passivePrice,
                 quantity: remainingQty,
               },
               {
@@ -185,17 +184,20 @@ class SmartRouterService {
               bookFilledQuantity: passiveOrder.filledQuantity,
               ammFilledQuantity: 0,
               bookOrderId: passiveOrder.orderId,
-              estimatedBookPrice: bestBookPrice ?? dto.optionalLimitPrice,
+              estimatedBookPrice: bestBookPrice ?? passivePrice,
               estimatedAmmPrice: null,
             };
+          };
+
+          // If AMM is unavailable but user submitted a limit price, place a resting order on book.
+          if (typeof dto.optionalLimitPrice === 'number') {
+            return placePassiveOrder(dto.optionalLimitPrice);
           }
 
-          const noBookLiquidity = bestBookPrice === null;
-          if (noBookLiquidity) {
-            throw new AppError(
-              'No matching orderbook liquidity and AMM trading is disabled for this market.',
-              409
-            );
+          // AMM unavailable and market order requested:
+          // place a neutral resting order instead of hard-failing.
+          if (bestBookPrice === null) {
+            return placePassiveOrder(0.5);
           }
 
           if (ammQuoteError instanceof Error) {

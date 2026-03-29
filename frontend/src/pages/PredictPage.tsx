@@ -250,11 +250,23 @@ export default function PredictPage() {
 
       const res = await api.post("/trade/execute", payload);
       const route = res.data?.data?.route ?? "UNKNOWN";
-      toast({
-        type: "success",
-        icon: "✅",
-        msg: `${tradeSide} order executed via ${route}. Qty: ${quantity}`,
-      });
+      const bookFilled = Number(res.data?.data?.bookFilledQuantity ?? 0);
+      const ammFilled = Number(res.data?.data?.ammFilledQuantity ?? 0);
+      const filled = Number.isFinite(bookFilled + ammFilled) ? bookFilled + ammFilled : 0;
+
+      if (filled > 0) {
+        toast({
+          type: "success",
+          icon: "✅",
+          msg: `${tradeSide} order executed via ${route}. Filled qty: ${filled}`,
+        });
+      } else {
+        toast({
+          type: "info",
+          icon: "🕒",
+          msg: `No instant fill available. Your order was placed on the orderbook.`,
+        });
+      }
 
       const bookRes = await api.get(`/orderbook/${selectedMarketId}`, {
         params: { outcome: side, depth: 10 },
