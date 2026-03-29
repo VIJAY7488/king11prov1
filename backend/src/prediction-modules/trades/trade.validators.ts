@@ -110,14 +110,6 @@ export const createTradeSchema = Joi.object({
       }
     }
 
-    const calculatedTotalValue = Number((value.price * value.quantity).toFixed(8));
-    const inputTotalValue = Number((value.totalValue ?? 0).toFixed(8));
-    if (calculatedTotalValue !== inputTotalValue) {
-      return helpers.error('any.invalid', {
-        message: `totalValue must equal price * quantity (${calculatedTotalValue})`,
-      });
-    }
-
     return value;
   })
   .messages({

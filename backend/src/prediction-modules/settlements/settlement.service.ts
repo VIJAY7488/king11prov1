@@ -56,6 +56,12 @@ class SettlementService {
     return `SETTLEMENT:${marketId}:${userId}`;
   }
 
+  private getPayoutPerShare(market: { questionPrice?: { amount?: number } } | null): number {
+    const raw = Number(market?.questionPrice?.amount ?? 1);
+    if (!Number.isFinite(raw) || raw <= 0) return 1;
+    return round(raw);
+  }
+
   private async getOrCreateProcessingRecord(
     marketId: Types.ObjectId,
     resolvedBy: Types.ObjectId,
@@ -162,7 +168,8 @@ class SettlementService {
   private async processBatch(
     settlement: ISettlement,
     marketId: Types.ObjectId,
-    winningOutcome: TradeOutcome
+    winningOutcome: TradeOutcome,
+    payoutPerShare: number
   ): Promise<{
     processedCount: number;
     winningShares: number;
@@ -202,7 +209,7 @@ class SettlementService {
         const userId = row.userId.toString();
         const marketIdString = marketId.toString();
         const referenceId = this.settlementReferenceId(marketIdString, userId);
-        const sharePayout = didWin ? qty : 0;
+        const sharePayout = didWin ? round(qty * payoutPerShare) : 0;
         const pnl = round(sharePayout - row.investedAmount);
 
         if (didWin) {
@@ -223,6 +230,7 @@ class SettlementService {
                 marketId: marketIdString,
                 winningOutcome,
                 quantity: qty,
+                payoutPerShare,
               },
               session
             );
@@ -274,6 +282,8 @@ class SettlementService {
     if (completed) return this.toSummary(completed);
 
     const settlement = await this.getOrCreateProcessingRecord(marketId, adminId, winningOutcome, false);
+    const marketForPayout = await Market.findById(marketId).select('questionPrice.amount').lean();
+    const payoutPerShare = this.getPayoutPerShare(marketForPayout);
 
     try {
       const stats = await this.computeParticipantStats(marketId, winningOutcome);
@@ -291,7 +301,7 @@ class SettlementService {
       // Batch scan holdings until drained.
       // This keeps memory bounded and supports high participant counts.
       while (true) {
-        const batch = await this.processBatch(settlement, marketId, winningOutcome);
+        const batch = await this.processBatch(settlement, marketId, winningOutcome, payoutPerShare);
         if (batch.processedCount === 0) break;
       }
 

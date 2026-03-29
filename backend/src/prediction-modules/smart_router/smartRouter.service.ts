@@ -89,7 +89,13 @@ class SmartRouterService {
       }
 
       const ammEffectivePrice =
-        ammQuote ? round(ammQuote.effectivePrice ?? ammQuote.netAmount / dto.quantity) : null;
+        ammQuote
+          ? round(
+              typeof ammQuote.effectivePrice === 'number'
+                ? ammQuote.effectivePrice
+                : ammQuote.priceAfter
+            )
+          : null;
 
       const bookAcceptable = this.isBookPriceAcceptableForUser(dto.type, bestBookPrice, dto.optionalLimitPrice);
       const ammAcceptable = this.isPriceAcceptableForUser(dto.type, ammEffectivePrice, dto.optionalLimitPrice);

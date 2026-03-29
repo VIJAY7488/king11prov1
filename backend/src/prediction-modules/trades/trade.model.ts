@@ -166,10 +166,8 @@ tradeSchema.pre('validate', function (this: ITrade) {
     }
   }
 
-  const calculatedTotalValue = Number((this.price * this.quantity).toFixed(8));
-  const inputTotalValue = Number(this.totalValue.toFixed(8));
-  if (calculatedTotalValue !== inputTotalValue) {
-    this.totalValue = calculatedTotalValue;
+  if (!Number.isFinite(this.totalValue) || this.totalValue < 0) {
+    throw new Error('totalValue must be a non-negative finite number');
   }
 });
 

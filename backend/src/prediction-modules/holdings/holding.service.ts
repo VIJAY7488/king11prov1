@@ -5,6 +5,7 @@ import { WalletTxnReason } from '../../mdules/wallet/wallet.types';
 import { Holding, IHolding } from './holding.model';
 import { HoldingPositionDTO, HoldingSummaryDTO } from './holding.types';
 import { TradeOutcome } from '../trades/trade.types';
+import { Market } from '../markets/market.model';
 
 const round = (value: number): number => Number(value.toFixed(8));
 
@@ -229,6 +230,12 @@ class HoldingService {
   ): Promise<{ payout: number; settledPositions: number }> {
     const userObjectId = toObjectId(userId, 'userId');
     const marketObjectId = toObjectId(marketId, 'marketId');
+    const market = await Market.findById(marketObjectId).select('questionPrice.amount');
+    if (!market) throw new AppError('Market not found.', 404);
+    const payoutPerShareRaw = Number(market.questionPrice?.amount ?? 1);
+    const payoutPerShare = Number.isFinite(payoutPerShareRaw) && payoutPerShareRaw > 0
+      ? round(payoutPerShareRaw)
+      : 1;
 
     return withTransaction(async (session) => {
       const holdings = await Holding.find({ userId: userObjectId, marketId: marketObjectId }).session(session);
@@ -236,7 +243,7 @@ class HoldingService {
 
       let payout = 0;
       for (const h of holdings) {
-        const positionPayout = h.outcome === winningOutcome ? round(h.quantity * 1) : 0;
+        const positionPayout = h.outcome === winningOutcome ? round(h.quantity * payoutPerShare) : 0;
         const realizedDelta = round(positionPayout - h.investedAmount);
         payout = round(payout + positionPayout);
 
@@ -255,6 +262,7 @@ class HoldingService {
           {
             marketId,
             winningOutcome,
+            payoutPerShare,
             source: 'market-resolution',
           },
           session

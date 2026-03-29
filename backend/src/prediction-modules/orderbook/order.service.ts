@@ -114,13 +114,20 @@ class OrderbookService {
     }
   }
 
-  private async ensureTradableMarket(marketId: string, session: ClientSession): Promise<void> {
+  private getContractValue(market: { questionPrice?: { amount?: number } } | null): number {
+    const raw = Number(market?.questionPrice?.amount ?? 1);
+    if (!Number.isFinite(raw) || raw <= 0) return 1;
+    return round(raw);
+  }
+
+  private async ensureTradableMarket(marketId: string, session: ClientSession): Promise<number> {
     const market = await Market.findById(marketId).session(session);
     if (!market) throw new AppError('Market not found.', 404);
     if (market.status !== MarketStatus.OPEN) throw new AppError('Market is not open for trading.', 409);
     // Backward compatibility: legacy market docs may not have orderBookEnabled persisted.
     if (market.orderBookEnabled === false) throw new AppError('Order book is disabled for this market.', 409);
     if (market.closeAt && market.closeAt.getTime() <= Date.now()) throw new AppError('Market has closed for trading.', 409);
+    return this.getContractValue(market);
   }
 
   private sideSort(side: OrderSide): Record<string, 1 | -1> {
@@ -150,10 +157,16 @@ class OrderbookService {
     else order.status = order.filledQuantity > 0 ? OrderStatus.PARTIAL : OrderStatus.OPEN;
   }
 
-  private requiredLockAmount(side: OrderSide, orderType: OrderType, price: number, quantity: number): number {
+  private requiredLockAmount(
+    side: OrderSide,
+    orderType: OrderType,
+    price: number,
+    quantity: number,
+    contractValue: number
+  ): number {
     if (side !== OrderSide.BUY) return 0;
     const capPrice = orderType === OrderType.MARKET ? 0.99 : price;
-    return round(capPrice * quantity * (1 + FEE_RATE));
+    return round(capPrice * contractValue * quantity * (1 + FEE_RATE));
   }
 
   private async ensureSellCapacity(
@@ -204,16 +217,17 @@ class OrderbookService {
     sellerOrder: IOrder,
     fillQty: number,
     tradePrice: number,
+    contractValue: number,
     session: ClientSession
   ): Promise<{ buyerDebit: number; sellerCredit: number; buyerFee: number; sellerFee: number }> {
-    const gross = round(fillQty * tradePrice);
+    const gross = round(fillQty * tradePrice * contractValue);
     const buyerFee = round(gross * FEE_RATE);
     const sellerFee = round(gross * FEE_RATE);
     const buyerDebit = round(gross + buyerFee);
     const sellerCredit = round(gross - sellerFee);
 
     const buyerReserveRate = buyerOrder.orderType === OrderType.MARKET ? 0.99 : buyerOrder.price;
-    const buyerReservedForFill = round(fillQty * buyerReserveRate * (1 + FEE_RATE));
+    const buyerReservedForFill = round(fillQty * buyerReserveRate * contractValue * (1 + FEE_RATE));
 
     await walletService.transferLockedToDebit(
       buyerOrder.userId.toString(),
@@ -265,7 +279,11 @@ class OrderbookService {
     return { buyerDebit, sellerCredit, buyerFee, sellerFee };
   }
 
-  private async matchOrder(session: ClientSession, takerOrder: IOrder): Promise<MatchExecution[]> {
+  private async matchOrder(
+    session: ClientSession,
+    takerOrder: IOrder,
+    contractValue: number
+  ): Promise<MatchExecution[]> {
     const oppositeSide = takerOrder.side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY;
     const makers = await Order.find({
       marketId: takerOrder.marketId,
@@ -295,6 +313,7 @@ class OrderbookService {
         sellerOrder,
         fillQty,
         tradePrice,
+        contractValue,
         session
       );
 
@@ -302,12 +321,14 @@ class OrderbookService {
       this.updateOrderForFill(maker, fillQty, tradePrice);
 
       const buyerOrderReserveRate = buyerOrder.orderType === OrderType.MARKET ? 0.99 : buyerOrder.price;
-      const buyerReserved = round(fillQty * buyerOrderReserveRate * (1 + FEE_RATE));
+      const buyerReserved = round(fillQty * buyerOrderReserveRate * contractValue * (1 + FEE_RATE));
       buyerOrder.lockedAmount = round(Math.max(0, buyerOrder.lockedAmount - buyerReserved));
 
       if (maker.side === OrderSide.BUY) {
         const makerRate = maker.orderType === OrderType.MARKET ? 0.99 : maker.price;
-        maker.lockedAmount = round(Math.max(0, maker.lockedAmount - (fillQty * makerRate * (1 + FEE_RATE))));
+        maker.lockedAmount = round(
+          Math.max(0, maker.lockedAmount - (fillQty * makerRate * contractValue * (1 + FEE_RATE)))
+        );
       }
 
       await maker.save({ session });
@@ -325,7 +346,7 @@ class OrderbookService {
             sellerId: sellerOrder.userId,
             price: tradePrice,
             quantity: fillQty,
-            totalValue: round(fillQty * tradePrice),
+            totalValue: round(fillQty * tradePrice * contractValue),
             fees: {
               platform: round(buyerFee + sellerFee),
               breakdown: { buyerFee, sellerFee, feeRate: FEE_RATE },
@@ -380,7 +401,7 @@ class OrderbookService {
     const lockToken = await this.acquireBookLock(marketId, dto.outcome);
     try {
       const result = await withTransaction(async (session) => {
-        await this.ensureTradableMarket(marketId, session);
+        const contractValue = await this.ensureTradableMarket(marketId, session);
         await riskEngine.preTradeCheck(
           {
             marketId,
@@ -399,7 +420,7 @@ class OrderbookService {
         }
 
         const orderType = dto.orderType ?? OrderType.LIMIT;
-        const lockAmount = this.requiredLockAmount(dto.side, orderType, dto.price, dto.quantity);
+        const lockAmount = this.requiredLockAmount(dto.side, orderType, dto.price, dto.quantity, contractValue);
 
         const [order] = await Order.create(
           [
@@ -435,7 +456,7 @@ class OrderbookService {
         }
 
         await this.syncOrderToRedis(order);
-        const executions = await this.matchOrder(session, order);
+        const executions = await this.matchOrder(session, order, contractValue);
 
         return {
           orderId: order._id.toString(),

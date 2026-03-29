@@ -19,6 +19,12 @@ interface MarketRow {
     amount?: number;
     currency?: string;
   };
+  ammState?: {
+    q_yes?: number;
+    q_no?: number;
+    priceYes?: number;
+    priceNo?: number;
+  };
   closeAt?: string;
   orderBookEnabled?: boolean;
   ammEnabled?: boolean;
@@ -53,6 +59,21 @@ const LABEL: React.CSSProperties = {
 };
 
 const toId = (m: MarketRow): string => m.id ?? m._id ?? "";
+const asFinite = (value: unknown): number | null => {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+const yesOddsOf = (m: MarketRow): number => {
+  const direct = asFinite(m.ammState?.priceYes);
+  if (direct !== null && direct > 0 && direct < 1) return direct;
+  const qYes = asFinite(m.ammState?.q_yes);
+  const qNo = asFinite(m.ammState?.q_no);
+  if (qYes !== null && qNo !== null && qYes >= 0 && qNo >= 0 && qYes + qNo > 0) {
+    return qYes / (qYes + qNo);
+  }
+  return 0.5;
+};
+const formatOdds = (value: number): string => `${(value * 100).toFixed(1)}%`;
 
 const slugify = (value: string): string =>
   value
@@ -79,6 +100,7 @@ export default function AdminMarketsPage() {
     status: "OPEN",
     questionPrice: 10,
     questionPriceCurrency: "INR",
+    initialPriceYes: 0.5,
     closeAt: "",
     sourceType: "ORACLE" as ResolutionSourceType,
     provider: "cricbuzz",
@@ -100,6 +122,7 @@ export default function AdminMarketsPage() {
       status: "OPEN",
       questionPrice: 10,
       questionPriceCurrency: "INR",
+      initialPriceYes: 0.5,
       closeAt: "",
       sourceType: "ORACLE",
       provider: "cricbuzz",
@@ -147,6 +170,7 @@ export default function AdminMarketsPage() {
       status: market.status ?? "OPEN",
       questionPrice: market.questionPrice?.amount ?? 10,
       questionPriceCurrency: market.questionPrice?.currency ?? "INR",
+      initialPriceYes: yesOddsOf(market),
       closeAt: market.closeAt ? new Date(new Date(market.closeAt).getTime() - new Date(market.closeAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
       sourceType: market.resolutionSource?.type ?? "ORACLE",
       provider: market.resolutionSource?.provider ?? "cricbuzz",
@@ -162,6 +186,10 @@ export default function AdminMarketsPage() {
     const slug = (form.slug.trim() || slugify(question)).toLowerCase();
     if (!Number.isFinite(form.questionPrice) || form.questionPrice < 0) {
       setError("Question price must be 0 or more.");
+      return;
+    }
+    if (!Number.isFinite(form.initialPriceYes) || form.initialPriceYes < 0.01 || form.initialPriceYes > 0.99) {
+      setError("Initial YES odds must be between 0.01 and 0.99.");
       return;
     }
     if (!question || !slug || !form.closeAt || !form.referenceId.trim()) {
@@ -195,6 +223,7 @@ export default function AdminMarketsPage() {
         orderBookEnabled: form.orderBookEnabled,
         ammEnabled: form.ammEnabled,
         tags,
+        ...(!editingMarketId ? { initialPriceYes: Number(form.initialPriceYes) } : {}),
       };
 
       if (editingMarketId) {
@@ -284,7 +313,7 @@ export default function AdminMarketsPage() {
               </select>
             </div>
             <div>
-              <label style={LABEL}>Question Price</label>
+              <label style={LABEL}>Contract Value (₹)</label>
               <input
                 type="number"
                 min={0}
@@ -302,6 +331,23 @@ export default function AdminMarketsPage() {
                 placeholder="INR"
                 style={INPUT}
               />
+            </div>
+            <div>
+              <label style={LABEL}>Initial YES Odds *</label>
+              <input
+                type="number"
+                min={0.01}
+                max={0.99}
+                step={0.01}
+                value={form.initialPriceYes}
+                onChange={(e) => setF("initialPriceYes", Number(e.target.value))}
+                style={INPUT}
+                disabled={!!editingMarketId}
+              />
+              <div style={{ marginTop: 6, color: "#666", fontSize: 11 }}>
+                {formatOdds(form.initialPriceYes)} YES / {formatOdds(1 - form.initialPriceYes)} NO
+                {editingMarketId ? " (set only at creation)" : ""}
+              </div>
             </div>
             <div>
               <label style={LABEL}>Close At *</label>
@@ -359,7 +405,7 @@ export default function AdminMarketsPage() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #1E1E1E" }}>
-                {["Question", "Price", "Category", "Status", "Close At", "Tags", "Actions", "ID"].map((h) => (
+                {["Question", "Price", "YES Odds", "Category", "Status", "Close At", "Tags", "Actions", "ID"].map((h) => (
                   <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, fontWeight: 700, color: "#444", textTransform: "uppercase" }}>{h}</th>
                 ))}
               </tr>
@@ -367,7 +413,7 @@ export default function AdminMarketsPage() {
             <tbody>
               {markets.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ padding: 24, textAlign: "center", color: "#444" }}>
+                  <td colSpan={9} style={{ padding: 24, textAlign: "center", color: "#444" }}>
                     No markets yet
                   </td>
                 </tr>
@@ -379,6 +425,9 @@ export default function AdminMarketsPage() {
                     {typeof m.questionPrice?.amount === "number"
                       ? `${m.questionPrice.currency ?? "INR"} ${m.questionPrice.amount}`
                       : "-"}
+                  </td>
+                  <td style={{ padding: "12px 16px", color: "#888", fontSize: 12 }}>
+                    {formatOdds(yesOddsOf(m))}
                   </td>
                   <td style={{ padding: "12px 16px", color: "#888", fontSize: 12 }}>{m.category ?? "-"}</td>
                   <td style={{ padding: "12px 16px", color: "#ddd", fontSize: 12 }}>{m.status ?? "-"}</td>

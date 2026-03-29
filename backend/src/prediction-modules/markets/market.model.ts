@@ -99,7 +99,7 @@ const questionPriceSubSchema = new Schema<IQuestionPriceConfig>(
     amount: {
       type: Number,
       required: [true, 'questionPrice.amount is required'],
-      default: 0.5,
+      default: 10,
       min: [0, 'questionPrice.amount cannot be negative'],
     },
     currency: {
@@ -197,7 +197,7 @@ const marketSchema = new Schema<IMarket, IMarketModel>(
       type: questionPriceSubSchema as any,
       required: [true, 'questionPrice is required'],
       default: {
-        amount: 0.5,
+        amount: 10,
         currency: 'INR',
       },
     },

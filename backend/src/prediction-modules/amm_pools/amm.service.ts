@@ -67,11 +67,12 @@ const buildTradeQuote = (
   quantity: number,
   oldState: LmsrState,
   newState: LmsrState,
+  contractValue: number,
   extraSpreadBps = 0
 ): AmmTradeQuote => {
   const oldCost = lmsrCost(oldState);
   const newCost = lmsrCost(newState);
-  const grossAmount = action === AmmTradeAction.BUY ? newCost - oldCost : oldCost - newCost;
+  const grossAmount = (action === AmmTradeAction.BUY ? newCost - oldCost : oldCost - newCost) * contractValue;
 
   if (grossAmount <= 0) {
     throw new AppError('Trade quote is not valid for requested quantity.', 400);
@@ -96,6 +97,12 @@ const buildTradeQuote = (
 };
 
 class AmmService {
+  private getContractValue(market: IMarket): number {
+    const raw = Number(market.questionPrice?.amount ?? 1);
+    if (!Number.isFinite(raw) || raw <= 0) return 1;
+    return round(raw);
+  }
+
   private async emitAmmRealtime(result: AmmTradeResult): Promise<void> {
     await Promise.all([
       publishMarketEvent(result.marketId, 'price_update', {
@@ -134,6 +141,7 @@ class AmmService {
     const market = await Market.findById(marketObjectId);
     if (!market) throw new AppError('Market not found.', 404);
     ensureTradableMarket(market);
+    const contractValue = this.getContractValue(market);
 
     const riskCheck = await riskEngine.preTradeCheck({
       marketId,
@@ -151,11 +159,19 @@ class AmmService {
       : { b: market.ammState.b, q_yes: market.ammState.q_yes, q_no: market.ammState.q_no };
 
     const newState = this.getNewState(oldState, outcome, action, quantity);
-    const quote = buildTradeQuote(action, outcome, quantity, oldState, newState, riskCheck.controls.spreadBps);
+    const quote = buildTradeQuote(
+      action,
+      outcome,
+      quantity,
+      oldState,
+      newState,
+      contractValue,
+      riskCheck.controls.spreadBps
+    );
     return {
       ...quote,
       marketId,
-      effectivePrice: round(quote.netAmount / quantity),
+      effectivePrice: round(quote.netAmount / (quantity * contractValue)),
     };
   }
 
@@ -289,6 +305,7 @@ class AmmService {
       );
 
       const { market, pool } = await this.getMarketAndPool(marketObjectId, session);
+      const contractValue = this.getContractValue(market);
 
       if (action === AmmTradeAction.SELL) {
         const positions = await holdingService.getUserHoldings(userId, marketId, session);
@@ -307,6 +324,7 @@ class AmmService {
         quantity,
         oldState,
         newState,
+        contractValue,
         riskCheck.controls.spreadBps
       );
       if (quote.netAmount <= 0) throw new AppError('Trade amount must be positive after fees.', 400);

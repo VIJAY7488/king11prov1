@@ -97,7 +97,7 @@ export const createMarketSchema = Joi.object({
   }),
 
   questionPrice: questionPriceSchema.default({
-    amount: 0.5,
+    amount: 10,
     currency: 'INR',
   }),
 

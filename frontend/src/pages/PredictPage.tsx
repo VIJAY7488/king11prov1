@@ -74,12 +74,13 @@ const normalizeBookRows = (raw: unknown): BookRow[] => {
     .filter((row) => Number.isFinite(row.price) && Number.isFinite(row.quantity) && row.price >= 0 && row.quantity >= 0);
 };
 
-const formatPrice = (value: number) => `₹${value.toFixed(2)}`;
+const formatCurrency = (value: number) => `₹${value.toFixed(2)}`;
+const formatOdds = (value: number) => `${(value * 100).toFixed(1)}%`;
 
 const formatQuestionPrice = (market?: MarketItem | null) => {
   const amount = market?.questionPrice?.amount;
   if (typeof amount !== "number" || !Number.isFinite(amount)) return null;
-  return `${market?.questionPrice?.currency ?? "INR"} ${amount.toFixed(2)}`;
+  return `${market?.questionPrice?.currency ?? "INR"} ${amount.toFixed(2)} / share`;
 };
 
 const formatTimeLeft = (closeAt?: string) => {
@@ -122,22 +123,43 @@ export default function PredictPage() {
 
   const bestAsk = asks[0]?.price ?? 0;
   const bestBid = bids[0]?.price ?? 0;
-  const defaultPrice = tradeSide === "BUY" ? bestAsk : bestBid;
+  const contractValue = useMemo(() => {
+    const amount = selectedMarket?.questionPrice?.amount;
+    if (typeof amount === "number" && Number.isFinite(amount) && amount > 0) return amount;
+    return 10;
+  }, [selectedMarket?.questionPrice?.amount]);
+  const referenceOdds = tradeSide === "BUY" ? bestAsk : bestBid;
+  const fallbackOdds = referenceOdds > 0 ? referenceOdds : 0.5;
   const [limitPrice, setLimitPrice] = useState<number>(0);
-  const activePrice = orderType === "LIMIT" ? (limitPrice > 0 ? limitPrice : defaultPrice) : defaultPrice;
-  const estCost = useMemo(() => Number((quantity * activePrice).toFixed(2)), [quantity, activePrice]);
-  const spread = useMemo(() => {
+  const activeOdds = orderType === "LIMIT" ? (limitPrice > 0 ? limitPrice : fallbackOdds) : fallbackOdds;
+  const estCost = useMemo(
+    () => Number((quantity * activeOdds * contractValue).toFixed(2)),
+    [quantity, activeOdds, contractValue]
+  );
+  const spreadOdds = useMemo(() => {
     if (bestAsk <= 0 || bestBid <= 0) return null;
-    return Number((bestAsk - bestBid).toFixed(2));
+    return Number((bestAsk - bestBid).toFixed(4));
   }, [bestAsk, bestBid]);
+  const spreadCurrency = useMemo(() => {
+    if (spreadOdds === null) return null;
+    return Number((spreadOdds * contractValue).toFixed(2));
+  }, [spreadOdds, contractValue]);
   const totalBidQty = useMemo(() => bids.reduce((sum, row) => sum + row.quantity, 0), [bids]);
   const totalAskQty = useMemo(() => asks.reduce((sum, row) => sum + row.quantity, 0), [asks]);
   const questionPriceLabel = formatQuestionPrice(selectedMarket);
+  const perShareTradeValue = useMemo(
+    () => Number((activeOdds * contractValue).toFixed(2)),
+    [activeOdds, contractValue]
+  );
+  const maxSettlementPayout = useMemo(
+    () => Number((quantity * contractValue).toFixed(2)),
+    [quantity, contractValue]
+  );
   const timeLeft = formatTimeLeft(selectedMarket?.closeAt);
 
   useEffect(() => {
-    setLimitPrice(defaultPrice);
-  }, [defaultPrice]);
+    setLimitPrice(fallbackOdds);
+  }, [fallbackOdds]);
 
   useEffect(() => {
     let active = true;
@@ -223,7 +245,7 @@ export default function PredictPage() {
         outcome: side,
         type: tradeSide,
         quantity,
-        optionalLimitPrice: orderType === "LIMIT" && activePrice > 0 ? activePrice : undefined,
+        optionalLimitPrice: orderType === "LIMIT" && activeOdds > 0 ? activeOdds : undefined,
       };
 
       const res = await api.post("/trade/execute", payload);
@@ -267,17 +289,17 @@ export default function PredictPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-2xl border border-[#EFE3D4] bg-white/80 px-4 py-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#9B7B63]">Best Bid</p>
-                <p className="mt-1 text-lg font-black text-[#1A1208]">{bestBid > 0 ? formatPrice(bestBid) : "--"}</p>
+                <div className="rounded-2xl border border-[#EFE3D4] bg-white/80 px-4 py-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#9B7B63]">Best Bid Odds</p>
+                <p className="mt-1 text-lg font-black text-[#1A1208]">{bestBid > 0 ? formatOdds(bestBid) : "--"}</p>
               </div>
               <div className="rounded-2xl border border-[#EFE3D4] bg-white/80 px-4 py-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#9B7B63]">Best Ask</p>
-                <p className="mt-1 text-lg font-black text-[#1A1208]">{bestAsk > 0 ? formatPrice(bestAsk) : "--"}</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#9B7B63]">Best Ask Odds</p>
+                <p className="mt-1 text-lg font-black text-[#1A1208]">{bestAsk > 0 ? formatOdds(bestAsk) : "--"}</p>
               </div>
               <div className="rounded-2xl border border-[#EFE3D4] bg-white/80 px-4 py-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#9B7B63]">Spread</p>
-                <p className="mt-1 text-lg font-black text-[#1A1208]">{spread !== null ? formatPrice(spread) : "--"}</p>
+                <p className="mt-1 text-lg font-black text-[#1A1208]">{spreadOdds !== null ? formatOdds(spreadOdds) : "--"}</p>
               </div>
               <div className="rounded-2xl border border-[#EFE3D4] bg-white/80 px-4 py-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#9B7B63]">Question Price</p>
@@ -430,8 +452,10 @@ export default function PredictPage() {
                         className="grid grid-cols-[1fr_auto] items-center rounded-2xl bg-white/90 px-3 py-2 shadow-[0_6px_18px_rgba(11,138,55,0.06)]"
                       >
                         <div>
-                          <p className="text-lg font-black text-[#0B8A37]">{Number(row.price).toFixed(2)}</p>
-                          <p className="text-[11px] font-semibold text-[#6D8474]">Bid price</p>
+                          <p className="text-lg font-black text-[#0B8A37]">{formatOdds(Number(row.price))}</p>
+                          <p className="text-[11px] font-semibold text-[#6D8474]">
+                            {formatCurrency(Number(row.price) * contractValue)} / share
+                          </p>
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-black text-[#1A1208]">{row.quantity}</p>
@@ -464,8 +488,10 @@ export default function PredictPage() {
                         className="grid grid-cols-[1fr_auto] items-center rounded-2xl bg-white/90 px-3 py-2 shadow-[0_6px_18px_rgba(217,72,15,0.06)]"
                       >
                         <div>
-                          <p className="text-lg font-black text-[#D9480F]">{Number(row.price).toFixed(2)}</p>
-                          <p className="text-[11px] font-semibold text-[#8A695B]">Ask price</p>
+                          <p className="text-lg font-black text-[#D9480F]">{formatOdds(Number(row.price))}</p>
+                          <p className="text-[11px] font-semibold text-[#8A695B]">
+                            {formatCurrency(Number(row.price) * contractValue)} / share
+                          </p>
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-black text-[#1A1208]">{row.quantity}</p>
@@ -490,12 +516,14 @@ export default function PredictPage() {
                 <div className="rounded-2xl border border-[#E8E0D4] bg-white px-4 py-3">
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#8A715D]">Best Bid / Ask</p>
                   <p className="mt-1 text-sm font-black text-[#1A1208]">
-                    {bestBid > 0 || bestAsk > 0 ? `${bestBid.toFixed(2)} / ${bestAsk.toFixed(2)}` : "--"}
+                    {bestBid > 0 || bestAsk > 0 ? `${formatOdds(bestBid)} / ${formatOdds(bestAsk)}` : "--"}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-[#E8E0D4] bg-white px-4 py-3">
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#8A715D]">Spread</p>
-                  <p className="mt-1 text-sm font-black text-[#1A1208]">{spread !== null ? spread.toFixed(2) : "--"}</p>
+                  <p className="mt-1 text-sm font-black text-[#1A1208]">
+                    {spreadOdds !== null ? `${formatOdds(spreadOdds)} (${formatCurrency(spreadCurrency ?? 0)})` : "--"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -564,8 +592,8 @@ export default function PredictPage() {
                   <p className="text-xs font-bold text-[#7A6A55]">Live reference</p>
                   <p className="text-xs font-black text-[#1A1208]">
                     {tradeSide === "BUY"
-                      ? bestAsk > 0 ? `Best ask ${formatPrice(bestAsk)}` : "No ask liquidity"
-                      : bestBid > 0 ? `Best bid ${formatPrice(bestBid)}` : "No bid liquidity"}
+                      ? bestAsk > 0 ? `Best ask ${formatOdds(bestAsk)} (${formatCurrency(bestAsk * contractValue)})` : "No ask liquidity"
+                      : bestBid > 0 ? `Best bid ${formatOdds(bestBid)} (${formatCurrency(bestBid * contractValue)})` : "No bid liquidity"}
                   </p>
                 </div>
 
@@ -635,12 +663,20 @@ export default function PredictPage() {
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                   <div className="rounded-2xl bg-white/8 px-3 py-2">
-                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#D8C1AA]">Execution Price</p>
-                    <p className="mt-1 font-black">{activePrice > 0 ? activePrice.toFixed(2) : "--"}</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#D8C1AA]">Execution Odds</p>
+                    <p className="mt-1 font-black">{activeOdds > 0 ? formatOdds(activeOdds) : "--"}</p>
                   </div>
                   <div className="rounded-2xl bg-white/8 px-3 py-2">
                     <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#D8C1AA]">Quantity</p>
                     <p className="mt-1 font-black">{quantity}</p>
+                  </div>
+                  <div className="rounded-2xl bg-white/8 px-3 py-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#D8C1AA]">Per Share Value</p>
+                    <p className="mt-1 font-black">{formatCurrency(perShareTradeValue)}</p>
+                  </div>
+                  <div className="rounded-2xl bg-white/8 px-3 py-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#D8C1AA]">Max Settlement</p>
+                    <p className="mt-1 font-black">{formatCurrency(maxSettlementPayout)}</p>
                   </div>
                 </div>
               </div>

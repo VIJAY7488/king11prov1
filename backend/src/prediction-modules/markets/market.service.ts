@@ -16,13 +16,19 @@ class MarketService {
     return Number(value.toFixed(8));
   }
 
+  private clampProbability(value: number): number {
+    if (!Number.isFinite(value)) return 0.5;
+    return Math.min(0.99, Math.max(0.01, value));
+  }
+
   private toObjectId(id: string, label: string): Types.ObjectId {
     if (!Types.ObjectId.isValid(id)) throw new AppError(`Invalid ${label}.`, 400);
     return new Types.ObjectId(id);
   }
 
-  private buildNeutralAmmState(
-    rawAmmState: unknown
+  private buildInitialAmmState(
+    rawAmmState: unknown,
+    initialPriceYes?: number
   ): { q_yes: number; q_no: number; b: number; totalLiquidity: number } {
     const ammState =
       rawAmmState && typeof rawAmmState === 'object'
@@ -32,14 +38,30 @@ class MarketService {
     const b = Number(ammState.b ?? 100);
     const totalLiquidity = Number(ammState.totalLiquidity ?? 10000);
     const defaultMid = Math.max(1000, b * 10);
-    const providedBase = Number(ammState.q_yes ?? ammState.q_no ?? defaultMid);
-    const mid = Number.isFinite(providedBase) && providedBase > 0
-      ? providedBase
-      : defaultMid;
+    const desiredYesPrice = this.clampProbability(
+      typeof initialPriceYes === 'number' ? initialPriceYes : 0.5
+    );
+    const logit = Math.log(desiredYesPrice / (1 - desiredYesPrice));
+
+    // Keep total inventory centered while shifting YES/NO ratio to match initial odds.
+    // LMSR relation: logit(p_yes) = (q_yes - q_no) / b
+    const totalQ = defaultMid * 2;
+    const delta = b * logit;
+    const minQ = 1;
+    let qYes = (totalQ + delta) / 2;
+    let qNo = (totalQ - delta) / 2;
+
+    if (!Number.isFinite(qYes) || !Number.isFinite(qNo) || qYes <= 0 || qNo <= 0) {
+      qYes = defaultMid;
+      qNo = defaultMid;
+    }
+
+    qYes = Math.max(minQ, qYes);
+    qNo = Math.max(minQ, qNo);
 
     return {
-      q_yes: this.round(mid),
-      q_no: this.round(mid),
+      q_yes: this.round(qYes),
+      q_no: this.round(qNo),
       b: this.round(b),
       totalLiquidity: this.round(totalLiquidity),
     };
@@ -49,8 +71,10 @@ class MarketService {
     const createdBy = this.toObjectId(adminUserId, 'adminUserId');
     const input: Record<string, unknown> = { ...payload };
 
+    const initialPriceYesRaw = Number(input.initialPriceYes);
+    const initialPriceYes = Number.isFinite(initialPriceYesRaw) ? initialPriceYesRaw : 0.5;
+    input.ammState = this.buildInitialAmmState(input.ammState, initialPriceYes);
     delete input.initialPriceYes;
-    input.ammState = this.buildNeutralAmmState(input.ammState);
 
     const doc = await Market.create({
       ...input,
