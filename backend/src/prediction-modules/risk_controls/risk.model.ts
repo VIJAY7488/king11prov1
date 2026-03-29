@@ -15,6 +15,7 @@ export interface IRiskControl extends Document {
   ammEnabled: boolean;
   orderBookEnabled: boolean;
   marketFrozen: boolean;
+  manualFreeze: boolean;
   circuitBreakerUntil: Date | null;
   maxOrderSizePerUser: number;
   maxPositionPerUser: number;
@@ -142,6 +143,10 @@ const riskControlSchema = new Schema<IRiskControl, IRiskControlModel>(
     marketFrozen: {
       type: Boolean,
       required: [true, 'marketFrozen is required'],
+      default: false,
+    },
+    manualFreeze: {
+      type: Boolean,
       default: false,
     },
     circuitBreakerUntil: {

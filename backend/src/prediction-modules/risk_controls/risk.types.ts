@@ -60,6 +60,7 @@ export interface RiskRealtimeSnapshot {
   ammEnabled: boolean;
   orderBookEnabled: boolean;
   marketFrozen: boolean;
+  manualFreeze: boolean;
   circuitBreakerUntil: string | null;
   dynamicSpreadBps: number;
   adjustedB: number;

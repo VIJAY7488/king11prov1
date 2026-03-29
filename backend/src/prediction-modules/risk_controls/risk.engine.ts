@@ -13,6 +13,10 @@ const GLOBAL_KILL_SWITCH_KEY = 'risk:global:kill_switch';
 const marketSnapshotKey = (marketId: string): string => `risk:market:${marketId}:snapshot`;
 const fraudVelocityKey = (userId: string, marketId: string): string =>
   `risk:fraud:user:${userId}:market:${marketId}:velocity_60s`;
+const IMBALANCE_GUARD_MIN_EXPOSURE_RATIO = 0.01;
+const IMBALANCE_GUARD_MIN_EXPOSURE_ABS = 200;
+const CIRCUIT_BREAKER_IMBALANCE_THRESHOLD = 2.5;
+const AUTO_FREEZE_IMBALANCE_THRESHOLD = 5;
 
 class RiskEngine {
   private toObjectId(id: string, label: string): Types.ObjectId {
@@ -25,6 +29,10 @@ class RiskEngine {
     if (utilization >= 0.85) return { spreadBps: 180, bMultiplier: 0.75 };
     if (utilization >= 0.7) return { spreadBps: 80, bMultiplier: 0.9 };
     return { spreadBps: 0, bMultiplier: 1 };
+  }
+
+  private minExposureForImbalanceGuards(maxExposure: number): number {
+    return round(Math.max(IMBALANCE_GUARD_MIN_EXPOSURE_ABS, maxExposure * IMBALANCE_GUARD_MIN_EXPOSURE_RATIO));
   }
 
   private async getOrCreateRiskControl(
@@ -85,7 +93,12 @@ class RiskEngine {
       throw new AppError('AMM disabled by global kill switch.', 409);
     }
 
-    const risk = await this.getOrCreateRiskControl(input.marketId, session);
+    let risk = await this.getOrCreateRiskControl(input.marketId, session);
+    if (risk.marketFrozen && !Boolean(risk.manualFreeze)) {
+      await this.postTradeUpdate(input.marketId, session);
+      risk = await this.getOrCreateRiskControl(input.marketId, session);
+    }
+
     const now = Date.now();
     if (risk.marketFrozen) throw new AppError('Market is frozen by risk controls.', 409);
     if (risk.circuitBreakerUntil && risk.circuitBreakerUntil.getTime() > now) {
@@ -197,6 +210,11 @@ class RiskEngine {
     risk.adjustedB = round(Math.max(10, risk.baseB * controls.bMultiplier));
 
     // Safety controls
+    const wasFrozen = risk.marketFrozen;
+    const hasManualFreeze = Boolean(risk.manualFreeze);
+    const imbalanceGuardMinExposure = this.minExposureForImbalanceGuards(risk.maxExposure);
+    const imbalanceGuardEnabled = risk.currentExposure >= imbalanceGuardMinExposure;
+
     if (risk.exposureUtilization >= 1.0) {
       risk.ammEnabled = false;
       risk.alerts.push({
@@ -208,21 +226,34 @@ class RiskEngine {
       });
     }
 
-    if (risk.imbalanceRatio >= 2.5) {
+    if (imbalanceGuardEnabled && risk.imbalanceRatio >= CIRCUIT_BREAKER_IMBALANCE_THRESHOLD) {
       risk.circuitBreakerUntil = new Date(Date.now() + 60_000);
       risk.alerts.push({
         type: RiskAlertType.CIRCUIT_BREAKER,
         triggeredAt: new Date(),
-        threshold: 2.5,
+        threshold: CIRCUIT_BREAKER_IMBALANCE_THRESHOLD,
         value: risk.imbalanceRatio,
         resolved: false,
       });
+    } else if (risk.circuitBreakerUntil && risk.circuitBreakerUntil.getTime() <= Date.now()) {
+      risk.circuitBreakerUntil = null;
     }
 
-    if (risk.imbalanceRatio >= 5) {
+    if (imbalanceGuardEnabled && risk.imbalanceRatio >= AUTO_FREEZE_IMBALANCE_THRESHOLD) {
       risk.marketFrozen = true;
-      risk.ammEnabled = false;
-      risk.orderBookEnabled = false;
+      risk.alerts.push({
+        type: RiskAlertType.HIGH_IMBALANCE,
+        triggeredAt: new Date(),
+        threshold: AUTO_FREEZE_IMBALANCE_THRESHOLD,
+        value: risk.imbalanceRatio,
+        resolved: false,
+      });
+    } else if (!hasManualFreeze) {
+      risk.marketFrozen = false;
+      if (wasFrozen && !risk.ammEnabled && !risk.orderBookEnabled && risk.exposureUtilization < 1.0) {
+        risk.ammEnabled = true;
+        risk.orderBookEnabled = true;
+      }
     }
 
     if (session) await risk.save({ session });
@@ -261,6 +292,7 @@ class RiskEngine {
       ammEnabled: risk.ammEnabled,
       orderBookEnabled: risk.orderBookEnabled,
       marketFrozen: risk.marketFrozen,
+      manualFreeze: Boolean(risk.manualFreeze),
       circuitBreakerUntil: risk.circuitBreakerUntil ? risk.circuitBreakerUntil.toISOString() : null,
       dynamicSpreadBps: risk.dynamicSpreadBps,
       adjustedB: risk.adjustedB,

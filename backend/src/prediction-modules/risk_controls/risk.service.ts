@@ -73,7 +73,10 @@ class RiskService {
     if (typeof payload.maxExposure === 'number') risk.maxExposure = payload.maxExposure;
     if (typeof payload.ammEnabled === 'boolean') risk.ammEnabled = payload.ammEnabled;
     if (typeof payload.orderBookEnabled === 'boolean') risk.orderBookEnabled = payload.orderBookEnabled;
-    if (typeof payload.marketFrozen === 'boolean') risk.marketFrozen = payload.marketFrozen;
+    if (typeof payload.marketFrozen === 'boolean') {
+      risk.marketFrozen = payload.marketFrozen;
+      risk.manualFreeze = payload.marketFrozen;
+    }
     if (typeof payload.maxOrderSizePerUser === 'number') risk.maxOrderSizePerUser = payload.maxOrderSizePerUser;
     if (typeof payload.maxPositionPerUser === 'number') risk.maxPositionPerUser = payload.maxPositionPerUser;
     if (typeof payload.baseB === 'number') risk.baseB = payload.baseB;
