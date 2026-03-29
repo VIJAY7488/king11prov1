@@ -381,7 +381,10 @@ class AmmService {
         session
       );
 
-      const effectivePrice = quote.quantity > 0 ? round(quote.netAmount / quote.quantity) : 0;
+      // Holdings track canonical odds (0..1), not currency amounts.
+      const effectivePrice = quote.quantity > 0
+        ? round(quote.grossAmount / (quote.quantity * contractValue))
+        : 0;
       await holdingService.applyAmmTrade({
         userId,
         marketId,

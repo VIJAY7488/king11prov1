@@ -271,8 +271,9 @@ class OrderbookService {
       marketId: buyerOrder.marketId.toString(),
       outcome: this.toTradeOutcome(buyerOrder.outcome),
       quantity: fillQty,
-      buyerPrice: round(buyerDebit / fillQty),
-      sellerPrice: round(sellerCredit / fillQty),
+      // Holdings store odds prices (0..1); fees are tracked in wallet/trade records.
+      buyerPrice: round(tradePrice),
+      sellerPrice: round(tradePrice),
       session,
     });
 
